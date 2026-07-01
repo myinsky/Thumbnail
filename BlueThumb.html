@@ -55646,12 +55646,25 @@ window.addEventListener('resize',function(){
   #screen3 .vg-preview-panel{flex:1 1 100%;width:100%;}
 }
 
-/* 카드형 썸네일 그리드 — 기존 54px 리스트형을 카드형으로 교체 */
-#screen3 .studio-vstyle-dock #vstyleGrid{
-  grid-template-columns:repeat(auto-fill,minmax(122px,1fr))!important;
+/* 카드형 썸네일 그리드 — 기존 54px 리스트형을 카드형으로 교체.
+   모드별로 grid-template-columns가 제각각 강제되어 있어(블루=6열,
+   플랫폼 맞춤=auto-fit 8열 등) 카드 크기가 탭마다 달라지던 문제를
+   .vg-fixed6 마커 클래스로 전 모드 동일 6열로 통일. */
+#screen3 .studio-vstyle-dock #vstyleGrid.vg-fixed6{
+  grid-template-columns:repeat(6,minmax(0,1fr))!important;
   grid-auto-rows:auto!important;
-  gap:9px!important;
+  gap:10px!important;
   max-height:none!important;
+  overflow:visible!important;
+}
+@media(max-width:1500px){
+  #screen3 .studio-vstyle-dock #vstyleGrid.vg-fixed6{grid-template-columns:repeat(5,minmax(0,1fr))!important;}
+}
+@media(max-width:1100px){
+  #screen3 .studio-vstyle-dock #vstyleGrid.vg-fixed6{grid-template-columns:repeat(3,minmax(0,1fr))!important;}
+}
+@media(max-width:640px){
+  #screen3 .studio-vstyle-dock #vstyleGrid.vg-fixed6{grid-template-columns:repeat(2,minmax(0,1fr))!important;}
 }
 #screen3 .studio-vstyle-dock #vstyleGrid .vstyle-btn,
 #screen3 .studio-vstyle-dock.is-platform-composite #vstyleGrid .vstyle-btn{
@@ -55674,9 +55687,79 @@ window.addEventListener('resize',function(){
 #screen3 .studio-vstyle-dock.is-platform-composite #vstyleGrid .vstyle-btn .vstyle-name{font-size:11.5px!important;font-weight:800!important;margin-top:6px!important;line-height:1.2!important;color:#fff!important;}
 #screen3 .studio-vstyle-dock.is-platform-composite #vstyleGrid .vstyle-btn .vstyle-eng{font-size:8.5px!important;margin:1px 0 7px!important;}
 #screen3 .studio-vstyle-dock #vstyleGrid .vg-thumb{
-  position:relative;width:100%;height:64px;display:flex;align-items:center;justify-content:center;
-  font-size:24px;
+  position:relative;width:100%;height:88px;display:flex;align-items:center;justify-content:center;
+  font-size:30px;
 }
+/* 플랫폼 맞춤 「출력 규격」 프리셋 칩 — 스타일 갤러리 카드와 같은 룩앤필로 통일 */
+#screen3 .studio-vstyle-dock #platformVstyleDockPanel{
+  border:1px solid var(--border)!important;
+  border-radius:14px!important;
+  background:var(--s1)!important;
+  padding:14px!important;
+  margin-bottom:12px!important;
+}
+#screen3 .studio-vstyle-dock #platformVstyleDockPanel .platform-vstyle-dock-head{
+  display:flex!important;align-items:center;gap:10px;margin-bottom:10px!important;
+}
+#screen3 .studio-vstyle-dock #platformVstyleDockPanel .platform-vstyle-dock-title{
+  font-size:13px!important;font-weight:900!important;color:var(--text)!important;
+}
+#screen3 .studio-vstyle-dock #platformVstyleDockPanel .platform-vstyle-dock-current{
+  font-size:11px!important;color:var(--muted2)!important;
+}
+#screen3 .studio-vstyle-dock #platformVstyleDockPanel .platform-vstyle-dock-subtitle{
+  font-size:10.5px!important;font-family:var(--mono)!important;color:var(--muted)!important;
+  letter-spacing:.04em!important;text-transform:uppercase!important;margin-bottom:8px!important;
+}
+#screen3 .studio-vstyle-dock.is-platform-composite #platformVstyleDockPanel #webPublishPresetGrid.vg-preset-grid,
+#screen3 .studio-vstyle-dock #platformVstyleDockPanel #webPublishPresetGrid.vg-preset-grid{
+  display:grid!important;
+  grid-template-columns:repeat(6,minmax(0,1fr))!important;
+  gap:9px!important;
+}
+@media(max-width:1500px){
+  #screen3 .studio-vstyle-dock #platformVstyleDockPanel #webPublishPresetGrid.vg-preset-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important;}
+}
+@media(max-width:1100px){
+  #screen3 .studio-vstyle-dock #platformVstyleDockPanel #webPublishPresetGrid.vg-preset-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important;}
+}
+#screen3 .studio-vstyle-dock.is-platform-composite #platformVstyleDockPanel #webPublishPresetGrid.vg-preset-grid .vstyle-btn.vg-preset-card,
+#screen3 .studio-vstyle-dock #platformVstyleDockPanel #webPublishPresetGrid.vg-preset-grid .vstyle-btn.vg-preset-card{
+  height:auto!important;min-height:0!important;max-height:none!important;
+  display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;
+  gap:2px!important;padding:12px 8px!important;border-radius:11px!important;
+  background:var(--s2)!important;border:1px solid var(--border)!important;
+  position:relative!important;box-sizing:border-box!important;
+}
+#screen3 .studio-vstyle-dock.is-platform-composite #platformVstyleDockPanel #webPublishPresetGrid.vg-preset-grid .vstyle-btn.vg-preset-card:hover,
+#screen3 .studio-vstyle-dock #platformVstyleDockPanel #webPublishPresetGrid.vg-preset-grid .vstyle-btn.vg-preset-card:hover{
+  border-color:rgba(56,189,248,.5)!important;background:rgba(56,189,248,.08)!important;
+}
+#screen3 .studio-vstyle-dock.is-platform-composite #platformVstyleDockPanel #webPublishPresetGrid.vg-preset-grid .vstyle-btn.vg-preset-card.active,
+#screen3 .studio-vstyle-dock #platformVstyleDockPanel #webPublishPresetGrid.vg-preset-grid .vstyle-btn.vg-preset-card.active{
+  border-color:var(--accent)!important;background:rgba(56,189,248,.16)!important;
+  box-shadow:0 0 0 1px rgba(56,189,248,.35)!important;
+}
+#screen3 .studio-vstyle-dock.is-platform-composite #platformVstyleDockPanel #webPublishPresetGrid.vg-preset-grid .vstyle-btn.vg-preset-card::before,
+#screen3 .studio-vstyle-dock #platformVstyleDockPanel #webPublishPresetGrid.vg-preset-grid .vstyle-btn.vg-preset-card::before,
+#screen3 .studio-vstyle-dock.is-platform-composite #platformVstyleDockPanel #webPublishPresetGrid.vg-preset-grid .vstyle-btn.vg-preset-card.active::after,
+#screen3 .studio-vstyle-dock #platformVstyleDockPanel #webPublishPresetGrid.vg-preset-grid .vstyle-btn.vg-preset-card.active::after{
+  content:none!important;display:none!important;
+}
+#screen3 .studio-vstyle-dock #platformVstyleDockPanel #webPublishPresetGrid.vg-preset-grid .vstyle-btn.vg-preset-card .vstyle-name,
+#screen3 .studio-vstyle-dock.is-platform-composite #platformVstyleDockPanel #webPublishPresetGrid.vg-preset-grid .vstyle-btn.vg-preset-card .vstyle-name{
+  font-size:12px!important;font-weight:800!important;color:#fff!important;position:static!important;padding:0!important;margin:0!important;
+}
+#screen3 .studio-vstyle-dock #platformVstyleDockPanel #webPublishPresetGrid.vg-preset-grid .vstyle-btn.vg-preset-card .vstyle-eng,
+#screen3 .studio-vstyle-dock.is-platform-composite #platformVstyleDockPanel #webPublishPresetGrid.vg-preset-grid .vstyle-btn.vg-preset-card .vstyle-eng{
+  font-size:10px!important;color:var(--muted2)!important;position:static!important;padding:0!important;margin:0!important;
+}
+#screen3 .studio-vstyle-dock #platformVstyleDockPanel #webPublishPresetGrid.vg-preset-grid .vg-preset-check{
+  position:absolute;top:6px;right:6px;width:16px;height:16px;border-radius:50%;
+  background:var(--accent);color:#04101c;display:none;align-items:center;justify-content:center;
+  font-size:10px;font-weight:900;
+}
+#screen3 .studio-vstyle-dock #platformVstyleDockPanel #webPublishPresetGrid.vg-preset-grid .vstyle-btn.vg-preset-card.active .vg-preset-check{display:flex;}
 #screen3 .studio-vstyle-dock #vstyleGrid .vg-badge{
   position:absolute;top:5px;right:5px;font-size:8.5px;font-weight:1000;letter-spacing:.02em;
   padding:2px 6px;border-radius:999px;background:rgba(2,6,23,.55);color:#fff;
@@ -55810,6 +55893,7 @@ window.addEventListener('resize',function(){
     var grid = document.getElementById('vstyleGrid');
     if(!grid || grid.__vgEnhanced) return grid;
     grid.__vgEnhanced = true;
+    grid.classList.add('vg-fixed6');
     var favs = getFavs();
     Array.prototype.forEach.call(grid.querySelectorAll('.vstyle-btn[data-style]'), function(btn){
       var key = btn.getAttribute('data-style');
@@ -55840,6 +55924,22 @@ window.addEventListener('resize',function(){
       btn.addEventListener('focus', function(){ if(!compareMode) updatePreview(key); });
     });
     return grid;
+  }
+
+  function enhancePresetGrid(){
+    var grid = document.getElementById('webPublishPresetGrid');
+    if(!grid || grid.__vgEnhanced) return;
+    grid.__vgEnhanced = true;
+    grid.classList.add('vg-preset-grid');
+    Array.prototype.forEach.call(grid.querySelectorAll('.vstyle-btn'), function(btn){
+      btn.classList.add('vg-preset-card');
+      if(!btn.querySelector('.vg-check')){
+        var chk = document.createElement('span');
+        chk.className = 'vg-check vg-preset-check';
+        chk.textContent = '✓';
+        btn.insertBefore(chk, btn.firstChild);
+      }
+    });
   }
 
   function applyCatFilter(){
@@ -56048,6 +56148,7 @@ window.addEventListener('resize',function(){
 
   function init(){
     enhanceCards();
+    enhancePresetGrid();
     buildToolbar();
     buildStatusBar();
     updatePreview('cinematic');
