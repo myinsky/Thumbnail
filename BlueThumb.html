@@ -55659,7 +55659,7 @@ window.addEventListener('resize',function(){
 #screen3 .studio-vstyle-dock #vstyleGrid.vg-fixed6{
   grid-template-columns:repeat(6,minmax(0,1fr))!important;
   grid-auto-rows:auto!important;
-  gap:14px!important;
+  gap:9px!important;
   max-height:none!important;
   overflow:visible!important;
 }
@@ -55695,11 +55695,11 @@ window.addEventListener('resize',function(){
 #screen3 .studio-vstyle-dock.is-platform-composite #vstyleGrid .vstyle-btn.active .vstyle-eng{
   display:block!important;text-align:center!important;padding:0 6px!important;position:static!important;color:inherit!important;
 }
-#screen3 .studio-vstyle-dock.is-platform-composite #vstyleGrid .vstyle-btn .vstyle-name{font-size:11.5px!important;font-weight:800!important;margin-top:6px!important;line-height:1.2!important;color:#fff!important;}
-#screen3 .studio-vstyle-dock.is-platform-composite #vstyleGrid .vstyle-btn .vstyle-eng{font-size:8.5px!important;margin:1px 0 7px!important;}
+#screen3 .studio-vstyle-dock.is-platform-composite #vstyleGrid .vstyle-btn .vstyle-name{font-size:11.5px!important;font-weight:800!important;margin-top:5px!important;line-height:1.2!important;color:#fff!important;}
+#screen3 .studio-vstyle-dock.is-platform-composite #vstyleGrid .vstyle-btn .vstyle-eng{font-size:8px!important;margin:1px 0 5px!important;}
 #screen3 .studio-vstyle-dock #vstyleGrid .vg-thumb{
-  position:relative;width:100%;height:112px;display:flex;align-items:center;justify-content:center;
-  font-size:34px;background-size:cover!important;background-position:center!important;
+  position:relative;width:100%;height:56px;display:flex;align-items:center;justify-content:center;
+  font-size:18px;background-size:cover!important;background-position:center!important;
   overflow:hidden;
 }
 #screen3 .studio-vstyle-dock #vstyleGrid .vg-thumb::after{
@@ -55709,14 +55709,14 @@ window.addEventListener('resize',function(){
   mix-blend-mode:overlay;opacity:.5;
 }
 #screen3 .studio-vstyle-dock #vstyleGrid .vg-thumb-glyph{
-  position:relative;z-index:1;filter:drop-shadow(0 4px 10px rgba(0,0,0,.55));
+  position:relative;z-index:1;filter:drop-shadow(0 2px 5px rgba(0,0,0,.55));
 }
 #screen3 .studio-vstyle-dock #vstyleGrid .vg-thumb-ghost{
-  position:absolute;right:-6px;bottom:-14px;font-size:64px;opacity:.16;
-  filter:blur(1.5px);transform:rotate(-8deg);z-index:0;pointer-events:none;
+  position:absolute;right:-4px;bottom:-8px;font-size:32px;opacity:.16;
+  filter:blur(1px);transform:rotate(-8deg);z-index:0;pointer-events:none;
 }
 #screen3 .studio-vstyle-dock #vstyleGrid .vstyle-btn .vstyle-name,
-#screen3 .studio-vstyle-dock #vstyleGrid .vstyle-btn .vstyle-eng{padding:0 8px!important;}
+#screen3 .studio-vstyle-dock #vstyleGrid .vstyle-btn .vstyle-eng{padding:0 7px!important;}
 /* 플랫폼 맞춤 「출력 규격」 프리셋 칩 — 스타일 갤러리 카드와 같은 룩앤필로 통일 */
 #screen3 .studio-vstyle-dock #platformVstyleDockPanel{
   border:1px solid var(--border)!important;
@@ -55788,24 +55788,24 @@ window.addEventListener('resize',function(){
 }
 #screen3 .studio-vstyle-dock #platformVstyleDockPanel #webPublishPresetGrid.vg-preset-grid .vstyle-btn.vg-preset-card.active .vg-preset-check{display:flex;}
 #screen3 .studio-vstyle-dock #vstyleGrid .vg-badge{
-  position:absolute;top:8px;right:8px;font-size:9px;font-weight:1000;letter-spacing:.03em;
-  padding:3px 8px;border-radius:999px;background:rgba(2,6,23,.55);color:#fff;
+  position:absolute;top:4px;right:4px;font-size:7.5px;font-weight:1000;letter-spacing:.02em;
+  padding:2px 6px;border-radius:999px;background:rgba(2,6,23,.55);color:#fff;
   border:1px solid rgba(255,255,255,.35);z-index:2;
-  box-shadow:0 3px 8px rgba(2,6,23,.35);
+  box-shadow:0 2px 5px rgba(2,6,23,.35);
 }
 #screen3 .studio-vstyle-dock #vstyleGrid .vg-badge.best{background:linear-gradient(180deg,#fff7ad,#facc15 62%,#ca8a04);color:#082f49;border-color:rgba(255,255,255,.7);}
 #screen3 .studio-vstyle-dock #vstyleGrid .vg-badge.new{background:rgba(56,189,248,.85);color:#04101c;border-color:rgba(255,255,255,.5);}
 #screen3 .studio-vstyle-dock #vstyleGrid .vg-badge.hot{background:rgba(251,113,133,.9);color:#fff;}
 #screen3 .studio-vstyle-dock #vstyleGrid .vg-badge.pro{background:rgba(139,92,246,.9);color:#fff;}
 #screen3 .studio-vstyle-dock #vstyleGrid .vg-check{
-  position:absolute;top:8px;left:8px;width:21px;height:21px;border-radius:50%;
+  position:absolute;top:4px;left:4px;width:16px;height:16px;border-radius:50%;
   background:linear-gradient(135deg,#38bdf8,#2563eb);color:#04101c;display:none;align-items:center;justify-content:center;
-  font-size:11px;font-weight:900;box-shadow:0 0 0 2px rgba(2,6,23,.55),0 3px 8px rgba(2,6,23,.4);z-index:2;
+  font-size:9px;font-weight:900;box-shadow:0 0 0 2px rgba(2,6,23,.55),0 2px 5px rgba(2,6,23,.4);z-index:2;
 }
 #screen3 .studio-vstyle-dock #vstyleGrid .vstyle-btn.active .vg-check{display:flex;}
 #screen3 .studio-vstyle-dock #vstyleGrid .vg-fav{
-  position:absolute;bottom:8px;right:8px;width:24px;height:24px;border-radius:50%;
-  border:1px solid rgba(255,255,255,.18);background:rgba(2,6,23,.55);color:rgba(255,255,255,.65);font-size:12px;
+  position:absolute;bottom:4px;right:4px;width:18px;height:18px;border-radius:50%;
+  border:1px solid rgba(255,255,255,.18);background:rgba(2,6,23,.55);color:rgba(255,255,255,.65);font-size:10px;
   display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:3;line-height:1;
   transition:transform .15s ease,background .15s ease;
 }
@@ -55816,8 +55816,8 @@ window.addEventListener('resize',function(){
 #screen3 .studio-vstyle-dock #vstyleGrid .vstyle-btn .vstyle-eng{
   display:block!important;text-align:center!important;padding:0 6px!important;
 }
-#screen3 .studio-vstyle-dock #vstyleGrid .vstyle-btn .vstyle-name{font-size:12.5px!important;font-weight:800!important;margin-top:9px!important;line-height:1.25!important;}
-#screen3 .studio-vstyle-dock #vstyleGrid .vstyle-btn .vstyle-eng{font-size:8.5px!important;margin:2px 0 10px!important;}
+#screen3 .studio-vstyle-dock #vstyleGrid .vstyle-btn .vstyle-name{font-size:11.5px!important;font-weight:800!important;margin-top:5px!important;line-height:1.2!important;}
+#screen3 .studio-vstyle-dock #vstyleGrid .vstyle-btn .vstyle-eng{font-size:8px!important;margin:1px 0 5px!important;}
 #screen3 .studio-vstyle-dock #vstyleGrid .vstyle-btn[data-vg-compare="1"]{outline:2px solid var(--pink)!important;outline-offset:-2px;}
 
 /* 컴페어(비교) 드로어 */
