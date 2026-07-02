@@ -6,85 +6,176 @@
 <title>네이버 카페 글쓰기 도우미</title>
 <style>
   :root{
-    --bg:#020617; --s1:#0f172a; --s2:#0b1830; --border:#25415f;
-    --accent:#38bdf8; --a2:#2563eb; --text:#edf7ff; --muted:#6f89a6; --muted2:#9db4ce;
-    --danger:#f87171; --menu-bg:#0a1322; --menu-ico:#182642; --menu-active:#1e293b;
+    --bg:#050b18; --s1:#0f1c33; --s2:#0c1830; --border:#22375a;
+    --accent:#38bdf8; --a2:#2563eb; --text:#eef6ff; --muted:#7a90ac; --muted2:#a7bdd6;
+    --danger:#f87171; --naver:#03c75a; --naver-deep:#029c46;
+    --purple:#a78bfa; --amber:#fbbf24; --teal:#2dd4bf; --pink:#f472b6;
   }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic",Roboto,sans-serif;line-height:1.5}
+  body{
+    margin:0;color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic",Roboto,sans-serif;line-height:1.55;
+    background:
+      radial-gradient(900px 480px at 8% -8%, rgba(56,189,248,.14), transparent 60%),
+      radial-gradient(700px 500px at 100% 0%, rgba(3,199,90,.10), transparent 55%),
+      radial-gradient(800px 600px at 50% 120%, rgba(167,139,250,.08), transparent 60%),
+      var(--bg);
+    background-attachment:fixed;
+  }
   .app{display:flex;min-height:100vh}
 
   /* ── 좌측 메뉴 ── */
-  .menu{width:250px;flex-shrink:0;background:var(--menu-bg);border-right:1px solid var(--border);padding:18px 10px;position:sticky;top:0;height:100vh;overflow-y:auto}
-  .menu-title{font-size:14px;font-weight:800;padding:8px 10px 18px;display:flex;align-items:center;gap:8px}
+  .menu{width:264px;flex-shrink:0;background:linear-gradient(180deg,rgba(15,28,51,.9),rgba(5,11,24,.96));border-right:1px solid var(--border);padding:20px 12px;position:sticky;top:0;height:100vh;overflow-y:auto;backdrop-filter:blur(6px)}
+  .menu-brand{display:flex;align-items:center;gap:10px;padding:6px 8px 22px}
+  .menu-brand-badge{
+    width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px;
+    background:linear-gradient(135deg,var(--naver),#00e05c);box-shadow:0 6px 18px rgba(3,199,90,.35);
+  }
+  .menu-brand-txt{font-size:14px;font-weight:800;color:#f8fafc;letter-spacing:-.2px}
+  .menu-brand-sub{font-size:10px;color:var(--muted);margin-top:1px}
+  .menu-section-label{font-size:10px;font-weight:800;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;padding:14px 10px 8px}
   .menu-item{
     display:flex;align-items:center;gap:12px;padding:10px;border-radius:14px;cursor:pointer;
-    margin-bottom:6px;user-select:none;border:1px solid transparent;
+    margin-bottom:5px;user-select:none;border:1px solid transparent;position:relative;
+    transition:background .15s,transform .1s;
   }
-  .menu-item:hover:not(.active){background:rgba(255,255,255,.04)}
-  .menu-item.active{background:var(--menu-active);border-color:rgba(56,189,248,.25)}
+  .menu-item:hover:not(.active){background:rgba(255,255,255,.045);transform:translateX(1px)}
+  .menu-item.active{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.08)}
+  .menu-item.active::before{
+    content:"";position:absolute;left:-1px;top:8px;bottom:8px;width:3px;border-radius:3px;
+    background:var(--item-accent,var(--accent));
+  }
   .menu-ico{
-    width:40px;height:40px;border-radius:11px;background:var(--menu-ico);
-    display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;
+    width:40px;height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;
+    background:var(--ico-bg,#182642);color:var(--ico-fg,#e2e8f0);
   }
-  .menu-label{font-size:13.5px;font-weight:600;color:var(--text)}
+  .menu-item.c-teal .menu-ico{--ico-bg:rgba(45,212,191,.14);--ico-fg:#5eead4}
+  .menu-item.c-blue .menu-ico{--ico-bg:rgba(56,189,248,.14);--ico-fg:#7dd3fc}
+  .menu-item.c-green .menu-ico{--ico-bg:rgba(3,199,90,.16);--ico-fg:#4ade80}
+  .menu-item.c-amber .menu-ico{--ico-bg:rgba(251,191,36,.14);--ico-fg:#fcd34d}
+  .menu-item.c-teal{--item-accent:var(--teal)} .menu-item.c-blue{--item-accent:var(--accent)}
+  .menu-item.c-green{--item-accent:var(--naver)} .menu-item.c-amber{--item-accent:var(--amber)}
+  .menu-label{font-size:13.5px;font-weight:700;color:var(--muted2)}
   .menu-item.active .menu-label{color:#f8fafc}
+  .menu-foot{margin-top:18px;padding:12px 12px;border-top:1px solid var(--border);font-size:10.5px;color:var(--muted);line-height:1.6}
 
   /* ── 우측 콘텐츠 ── */
-  .content{flex:1;padding:36px 32px 80px;max-width:720px}
+  .content{flex:1;padding:38px 36px 90px;max-width:860px}
   .screen{display:none}
-  .screen.active{display:block}
-  h1{font-size:20px;font-weight:800;margin:0 0 6px;display:flex;align-items:center;gap:8px}
-  .sub{font-size:12.5px;color:var(--muted2);line-height:1.6;margin-bottom:22px;max-width:600px}
-  label{font-size:12px;color:var(--muted2);display:block;margin-bottom:4px;margin-top:10px}
+  .screen.active{display:block;animation:fadeUp .28s ease}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+  .hero{display:flex;align-items:flex-start;gap:16px;margin-bottom:8px}
+  .hero-badge{
+    width:52px;height:52px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;
+    background:linear-gradient(135deg,var(--hero-a,#38bdf8),var(--hero-b,#2563eb));box-shadow:0 10px 26px rgba(0,0,0,.35);
+  }
+  .eyebrow{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--hero-a,var(--accent));margin-bottom:2px}
+  h1{font-size:21px;font-weight:800;margin:0}
+  .sub{font-size:12.5px;color:var(--muted2);line-height:1.65;margin:14px 0 26px;max-width:620px}
+
+  .card{
+    border:1px solid var(--border);border-radius:16px;padding:20px;margin-bottom:16px;
+    background:linear-gradient(160deg,rgba(255,255,255,.035),rgba(255,255,255,.01));
+    box-shadow:0 1px 0 rgba(255,255,255,.03) inset;
+  }
+  .card-head{display:flex;align-items:center;gap:9px;margin-bottom:12px}
+  .card-ico{width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:14px;background:var(--c-bg,rgba(56,189,248,.14));color:var(--c-fg,#7dd3fc)}
+  .card-title{font-size:13.5px;font-weight:800;color:#f8fafc}
+
+  label{font-size:12px;color:var(--muted2);display:block;margin-bottom:5px;margin-top:12px;font-weight:600}
   label:first-of-type{margin-top:0}
   input[type=text],input[type=password],textarea,select{
-    width:100%;background:var(--s2);border:1px solid var(--border);border-radius:8px;
-    padding:10px 12px;color:var(--text);font-size:13px;outline:none;box-sizing:border-box;
-    font-family:inherit;
+    width:100%;background:var(--s2);border:1px solid var(--border);border-radius:10px;
+    padding:11px 13px;color:var(--text);font-size:13px;outline:none;box-sizing:border-box;
+    font-family:inherit;transition:border-color .15s,box-shadow .15s;
   }
-  input[type=text]:focus,input[type=password]:focus,textarea:focus,select:focus{border-color:var(--accent)}
+  input[type=text]:focus,input[type=password]:focus,textarea:focus,select:focus{
+    border-color:var(--accent);box-shadow:0 0 0 3px rgba(56,189,248,.15);
+  }
   textarea{resize:vertical}
   .btn{
     appearance:none;border:1px solid rgba(56,189,248,.5);
-    background:linear-gradient(135deg,rgba(56,189,248,.24),rgba(37,99,235,.2));
-    color:#f8fafc;font-weight:800;font-size:13px;padding:10px 16px;border-radius:10px;
-    cursor:pointer;margin-top:14px;
+    background:linear-gradient(135deg,rgba(56,189,248,.28),rgba(37,99,235,.22));
+    color:#f8fafc;font-weight:800;font-size:13px;padding:11px 18px;border-radius:11px;
+    cursor:pointer;margin-top:16px;box-shadow:0 8px 22px rgba(37,99,235,.18);
+    transition:transform .12s,box-shadow .12s;
   }
-  .btn:disabled{opacity:.55;cursor:not-allowed}
-  .btn.small{font-size:11.5px;padding:7px 12px;border-radius:8px;margin-top:0}
-  .out{margin-top:14px}
-  .err{font-size:12px;color:var(--danger)}
+  .btn:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 10px 26px rgba(37,99,235,.26)}
+  .btn:disabled{opacity:.55;cursor:not-allowed;transform:none}
+  .btn.naver{
+    border-color:rgba(3,199,90,.55);background:linear-gradient(135deg,rgba(3,199,90,.32),rgba(2,156,70,.26));
+    box-shadow:0 8px 22px rgba(3,199,90,.2);
+  }
+  .btn.naver:hover:not(:disabled){box-shadow:0 10px 26px rgba(3,199,90,.3)}
+  .btn.small{font-size:11.5px;padding:8px 13px;border-radius:9px;margin-top:0}
+  .out{margin-top:16px}
+  .err{font-size:12px;color:var(--danger);background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.25);padding:10px 12px;border-radius:10px}
   .muted{font-size:12px;color:var(--muted2)}
-  .chip-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+  .chip-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px}
   .chip{
     appearance:none;border:1px solid rgba(56,189,248,.4);background:rgba(56,189,248,.1);
-    color:#e0f2fe;font-size:11.5px;padding:6px 10px;border-radius:999px;cursor:pointer;
+    color:#e0f2fe;font-size:11.5px;padding:7px 11px;border-radius:999px;cursor:pointer;transition:transform .1s,background .15s;
   }
-  ul.patterns{margin:0 0 14px 18px;padding:0;font-size:12px;color:var(--muted2);line-height:1.7}
+  .chip:hover{background:rgba(56,189,248,.2);transform:translateY(-1px)}
+  ul.patterns{margin:0 0 16px 18px;padding:0;font-size:12px;color:var(--muted2);line-height:1.75}
   .title-list{display:flex;flex-direction:column;gap:6px}
   .title-item{
     text-align:left;appearance:none;border:1px solid var(--border);background:var(--s2);
-    color:var(--text);font-size:12.5px;padding:9px 12px;border-radius:8px;cursor:pointer;width:100%;
+    color:var(--text);font-size:12.5px;padding:10px 13px;border-radius:10px;cursor:pointer;width:100%;
+    transition:border-color .15s,transform .1s;
   }
-  .title-item:hover{border-color:var(--accent)}
-  .out-block-title{font-size:12.5px;font-weight:700;color:var(--accent);margin-bottom:6px}
+  .title-item:hover{border-color:var(--accent);transform:translateX(2px)}
+  .out-block-title{font-size:12.5px;font-weight:800;color:var(--accent);margin-bottom:8px;display:flex;align-items:center;gap:6px}
   .draft-body{
-    width:100%;background:var(--s2);border:1px solid var(--border);border-radius:8px;
-    padding:10px 12px;color:var(--text);font-size:12.5px;line-height:1.7;box-sizing:border-box;resize:vertical;
+    width:100%;background:var(--s2);border:1px solid var(--border);border-radius:10px;
+    padding:12px 14px;color:var(--text);font-size:12.5px;line-height:1.8;box-sizing:border-box;resize:vertical;
   }
   .keyrow{display:flex;gap:8px;align-items:center}
   .keyrow input{flex:1}
-  .badge{font-size:10.5px;padding:3px 8px;border-radius:999px;border:1px solid var(--border);color:var(--muted2)}
-  .badge.ok{border-color:rgba(74,222,128,.5);color:#86efac}
+  .badge{font-size:10.5px;padding:4px 9px;border-radius:999px;border:1px solid var(--border);color:var(--muted2)}
+  .badge.ok{border-color:rgba(74,222,128,.5);color:#86efac;background:rgba(74,222,128,.08)}
   .toast{
     position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);
-    background:#0f766e;color:#f0fdfa;font-size:12.5px;font-weight:700;padding:10px 18px;
-    border-radius:999px;box-shadow:0 10px 30px rgba(0,0,0,.35);opacity:0;pointer-events:none;
+    background:linear-gradient(135deg,var(--naver),var(--naver-deep));color:#f0fdfa;font-size:12.5px;font-weight:700;padding:11px 20px;
+    border-radius:999px;box-shadow:0 12px 32px rgba(3,199,90,.35);opacity:0;pointer-events:none;
     transition:opacity .2s,transform .2s;z-index:50;
   }
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
   a{color:var(--accent)}
+
+  /* ── 가이드 화면 전용 ── */
+  .guide-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px}
+  @media (max-width:640px){.guide-grid{grid-template-columns:1fr}}
+  .g-card{border-radius:16px;padding:18px;border:1px solid var(--border);position:relative;overflow:hidden;background:var(--s1)}
+  .g-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--g-accent,var(--accent))}
+  .g-card .num{
+    width:26px;height:26px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;
+    font-size:12px;font-weight:800;background:var(--g-accent,var(--accent));color:#04101f;margin-bottom:10px;
+  }
+  .g-card h3{font-size:13.5px;font-weight:800;margin:0 0 8px;color:#f8fafc}
+  .g-card ul{margin:0;padding-left:16px;font-size:12px;color:var(--muted2);line-height:1.75}
+  .g-card ul li{margin-bottom:3px}
+  .formula-box{
+    border:1px dashed rgba(56,189,248,.4);background:rgba(56,189,248,.06);border-radius:12px;
+    padding:14px 16px;font-size:12.5px;color:#e0f2fe;margin:10px 0 4px;line-height:1.9;
+  }
+  .formula-box b{color:#7dd3fc}
+  .step-row{display:flex;gap:12px;align-items:flex-start;margin-bottom:14px}
+  .step-num{
+    width:26px;height:26px;border-radius:50%;background:rgba(3,199,90,.18);color:#4ade80;font-size:12px;font-weight:800;
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;
+  }
+  .step-body b{font-size:13px;color:#f8fafc}
+  .step-body p{font-size:12px;color:var(--muted2);margin:3px 0 0;line-height:1.7}
+  .warn-box{border:1px solid rgba(248,113,113,.3);background:rgba(248,113,113,.06);border-radius:12px;padding:14px 16px;margin-top:4px}
+  .warn-box h3{font-size:12.5px;font-weight:800;color:#fca5a5;margin:0 0 8px}
+  .warn-box ul{margin:0;padding-left:16px;font-size:12px;color:#fecaca;line-height:1.75}
+  .example-line{
+    display:block;font-size:12px;background:var(--s2);border:1px solid var(--border);border-radius:8px;
+    padding:8px 11px;margin:4px 0;color:var(--muted2);
+  }
+  .example-line b{color:#e0f2fe}
 
   @media (max-width:760px){
     .app{flex-direction:column}
@@ -92,9 +183,10 @@
       width:100%;height:auto;position:static;display:flex;overflow-x:auto;
       border-right:none;border-bottom:1px solid var(--border);padding:12px 10px;gap:8px;
     }
-    .menu-title{display:none}
-    .menu-item{flex-direction:column;gap:6px;min-width:78px;text-align:center;margin-bottom:0}
-    .menu-label{font-size:11px}
+    .menu-brand,.menu-section-label,.menu-foot{display:none}
+    .menu-item{flex-direction:column;gap:6px;min-width:78px;text-align:center;margin-bottom:0;padding:10px 8px}
+    .menu-item.active::before{left:8px;right:8px;top:auto;bottom:-2px;height:3px;width:auto}
+    .menu-label{font-size:10.5px}
     .content{padding:24px 18px 60px}
   }
 </style>
@@ -102,29 +194,142 @@
 <body>
 <div class="app">
   <nav class="menu">
-    <div class="menu-title">🗒️ 카페 글쓰기</div>
-    <div class="menu-item active" data-screen="analyze" onclick="switchScreen('analyze')">
+    <div class="menu-brand">
+      <div class="menu-brand-badge">🗒️</div>
+      <div>
+        <div class="menu-brand-txt">카페 글쓰기 도우미</div>
+        <div class="menu-brand-sub">Naver Cafe Writer</div>
+      </div>
+    </div>
+
+    <div class="menu-section-label">작성 준비</div>
+    <div class="menu-item c-teal active" data-screen="guide" onclick="switchScreen('guide')">
+      <div class="menu-ico">📋</div>
+      <div class="menu-label">작성 가이드</div>
+    </div>
+    <div class="menu-item c-blue" data-screen="analyze" onclick="switchScreen('analyze')">
       <div class="menu-ico">🔍</div>
       <div class="menu-label">키워드·제목 분석</div>
     </div>
-    <div class="menu-item" data-screen="draft" onclick="switchScreen('draft')">
+
+    <div class="menu-section-label">글 만들기</div>
+    <div class="menu-item c-green" data-screen="draft" onclick="switchScreen('draft')">
       <div class="menu-ico">✍️</div>
       <div class="menu-label">글 초안 생성</div>
     </div>
-    <div class="menu-item" data-screen="settings" onclick="switchScreen('settings')">
+
+    <div class="menu-section-label">설정</div>
+    <div class="menu-item c-amber" data-screen="settings" onclick="switchScreen('settings')">
       <div class="menu-ico">🔑</div>
       <div class="menu-label">API 키 설정</div>
     </div>
+
+    <div class="menu-foot">자동 게시 기능은 없습니다. 생성된 글은 직접 검토 후 카페에 붙여넣어 게시하세요.</div>
   </nav>
 
   <main class="content">
 
+    <!-- ⓪ 작성 가이드 -->
+    <section class="screen active" id="screen-guide">
+      <div class="hero" style="--hero-a:#2dd4bf;--hero-b:#0f766e">
+        <div class="hero-badge">📋</div>
+        <div>
+          <div class="eyebrow">Writing Guide</div>
+          <h1>네이버 카페 글쓰기 최적화 지침</h1>
+        </div>
+      </div>
+      <div class="sub">조회수·방문수는 글의 양이 아니라 전략의 차이에서 갈립니다. 아래 5가지 원칙은 「키워드·제목 분석」과 「글 초안 생성」이 실제로 따르는 규칙이기도 합니다.</div>
+
+      <div class="guide-grid">
+        <div class="g-card" style="--g-accent:#38bdf8">
+          <div class="num">1</div>
+          <h3>🔍 카페 탭 노출 키워드 선정</h3>
+          <ul>
+            <li>같은 주제라도 <b>블로그·지식인이 아닌 카페 탭</b>이 상위에 뜨는 키워드를 고른다</li>
+            <li>커뮤니티성·후기성·동호회성·지역성·증상·고민 상담형 키워드일수록 카페 노출 확률이 높다</li>
+            <li>글을 쓰기 전, 실제 네이버에 검색해 카페 탭 위치를 눈으로 확인하는 습관을 들인다</li>
+          </ul>
+        </div>
+        <div class="g-card" style="--g-accent:#a78bfa">
+          <div class="num">2</div>
+          <h3>🏷️ 제목 패턴 분석</h3>
+          <ul>
+            <li>인기글 제목의 <b>문장부호(큰따옴표·쉼표·괄호)</b> 하나까지 허투루 보지 않는다</li>
+            <li>잘 되는 카페의 인기글 제목을 주기적으로 스크랩하고 내 글에 적용해본다</li>
+            <li>과장·낚시성 제목은 신고·제재 위험이 있으므로 사실 기반으로 후킹한다</li>
+          </ul>
+        </div>
+        <div class="g-card" style="--g-accent:#03c75a">
+          <div class="num">3</div>
+          <h3>🎯 검색노출 + 홈판노출 동시 공략</h3>
+          <ul>
+            <li>글 개수보다 <b>한 글의 상위노출 가능성</b>을 먼저 판단하고 쓴다</li>
+            <li>첫 문단에 핵심 키워드를 자연스럽게 배치해 검색노출을 노린다</li>
+            <li>사진 첨부·댓글 유도로 초반 활동성을 높여 홈판노출 확률을 올린다</li>
+          </ul>
+        </div>
+        <div class="g-card" style="--g-accent:#fbbf24">
+          <div class="num">4</div>
+          <h3>♻️ 기존 글 관리 &amp; 재발행</h3>
+          <ul>
+            <li>조회수 높았던 글을 <b>리스트업</b>해두고 주기적으로 다시 살펴본다</li>
+            <li>카페 등급이 오르면 예전 글도 재발행해 놓치던 트래픽을 되살릴 수 있다</li>
+            <li>재발행 시 제목을 완전히 동일하게 쓰지 말고 일부 표현을 리프레시한다</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><div class="card-ico" style="--c-bg:rgba(167,139,250,.16);--c-fg:#c4b5fd">✏️</div><div class="card-title">제목 공식</div></div>
+        <div class="formula-box">
+          <b>[상황/결과]</b> + <b>"직접 인용/구어체"</b> + <b>(부가 설명·괄호)</b> 조합이 클릭률이 높습니다.
+        </div>
+        <span class="example-line">저도 이거 <b>3개월만에 -8kg</b> 뺐어요 <b>(feat.식단표)</b></span>
+        <span class="example-line"><b>"이거 모르면 손해"</b> 다이어트 식단 꿀팁 총정리</span>
+        <span class="example-line">강아지 분리불안, <b>저만 그런 게 아니었네요</b> (수의사 상담 후기)</span>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><div class="card-ico" style="--c-bg:rgba(3,199,90,.16);--c-fg:#4ade80">📐</div><div class="card-title">본문 구조 5단계</div></div>
+        <div class="step-row"><div class="step-num">1</div><div class="step-body"><b>오프닝 후킹 (2~3문장)</b><p>결론이나 감정을 먼저 던져 스크롤을 멈추게 한다.</p></div></div>
+        <div class="step-row"><div class="step-num">2</div><div class="step-body"><b>공감·상황 설명</b><p>독자가 겪는 고민·상황에 공감하며 자연스럽게 키워드를 배치한다.</p></div></div>
+        <div class="step-row"><div class="step-num">3</div><div class="step-body"><b>핵심 정보 (소제목 + 목록)</b><p>소제목과 번호·기호 목록으로 가독성을 높인다. 정보는 명확하고 구체적으로.</p></div></div>
+        <div class="step-row"><div class="step-num">4</div><div class="step-body"><b>경험·근거 제시</b><p>직접 경험·사진·수치 등 신뢰를 뒷받침하는 근거를 덧붙인다.</p></div></div>
+        <div class="step-row" style="margin-bottom:0"><div class="step-num">5</div><div class="step-body"><b>마무리 CTA (질문형)</b><p>댓글·공감을 유도하는 질문으로 끝맺어 활동 지수를 끌어올린다.</p></div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><div class="card-ico" style="--c-bg:rgba(56,189,248,.16);--c-fg:#7dd3fc">📱</div><div class="card-title">모바일 가독성 규칙</div></div>
+        <ul class="patterns" style="margin-bottom:0">
+          <li>1~2문장마다 줄바꿈, 한 문단은 3~4줄을 넘기지 않는다</li>
+          <li>소제목은 굵게·기호로 구분해 스캔하듯 읽히게 만든다</li>
+          <li>이모지·강조 표시는 과하지 않게, 핵심 문장에만 절제해서 사용한다</li>
+          <li>타겟 키워드는 본문 전체에 자연스럽게 2~4회 정도만 녹인다 (과다 반복은 어뷰징으로 보일 수 있음)</li>
+        </ul>
+      </div>
+
+      <div class="warn-box">
+        <h3>⚠️ 이런 표현·행동은 피하세요</h3>
+        <ul>
+          <li>과도한 홍보성 단어 반복("무료", "최저가" 등)이나 동일 문구 도배</li>
+          <li>짧은 시간 내 여러 게시판에 같은 글 중복 게시 (활동 제재·삭제 위험)</li>
+          <li>출처 없는 이미지·타인 게시물 무단 도용</li>
+          <li>실제와 다른 과장·낚시성 결과 제시</li>
+        </ul>
+      </div>
+    </section>
+
     <!-- ① 키워드·제목 분석 -->
-    <section class="screen active" id="screen-analyze">
-      <h1>🔍 키워드·제목 분석</h1>
+    <section class="screen" id="screen-analyze">
+      <div class="hero" style="--hero-a:#38bdf8;--hero-b:#2563eb">
+        <div class="hero-badge">🔍</div>
+        <div>
+          <div class="eyebrow">Step 1</div>
+          <h1>키워드·제목 분석</h1>
+        </div>
+      </div>
       <div class="sub">
-        네이버 통합검색에서 <b>블로그·지식인이 아니라 카페 탭이 상위 노출될 가능성이 높은 키워드</b>를 찾고,
-        조회수 잘 나오는 인기글 <b>제목 패턴</b>을 분석해 새 제목을 제안합니다.
+        <b>카페 탭 노출 원칙</b>과 <b>제목 공식</b>(작성 가이드 참고)을 기준으로, 블로그·지식인이 아니라 카페 탭이 상위 노출될 가능성이 높은 키워드를 찾고 새 제목을 제안합니다.
       </div>
       <label>주제/토픽 <span style="color:var(--danger)">*</span></label>
       <input type="text" id="topic" placeholder="예: 다이어트 식단, 강아지 분리불안, 전세 계약 주의사항">
@@ -136,10 +341,15 @@
 
     <!-- ② 글 초안 생성 -->
     <section class="screen" id="screen-draft">
-      <h1>✍️ 글 초안 생성</h1>
+      <div class="hero" style="--hero-a:#03c75a;--hero-b:#029c46">
+        <div class="hero-badge">✍️</div>
+        <div>
+          <div class="eyebrow">Step 2</div>
+          <h1>글 초안 생성</h1>
+        </div>
+      </div>
       <div class="sub">
-        검색노출과 홈판노출을 동시에 노리는 제목 후보 + 본문 초안을 만듭니다.
-        「키워드·제목 분석」에서 고른 제목/키워드가 있다면 아래에 자동으로 채워집니다.
+        <b>본문 구조 5단계</b> + <b>모바일 가독성 규칙</b>(작성 가이드 참고)을 따라, 검색노출과 홈판노출을 동시에 노리는 제목 후보와 본문 초안을 만듭니다.
       </div>
       <label>제목 (비워두면 자동 제안)</label>
       <input type="text" id="draftTitle" placeholder="분석에서 고른 제목을 붙여넣거나 직접 입력">
@@ -154,13 +364,19 @@
       </select>
       <label>핵심 내용 메모 (알고 있는 사실·경험을 자유롭게) <span style="color:var(--danger)">*</span></label>
       <textarea id="draftNotes" rows="4" placeholder="글에 꼭 들어갔으면 하는 내용을 메모하세요. 구체적일수록 좋습니다."></textarea>
-      <button type="button" class="btn" id="draftBtn" onclick="runDraft()">✍️ 초안 생성하기</button>
+      <button type="button" class="btn naver" id="draftBtn" onclick="runDraft()">✍️ 초안 생성하기</button>
       <div id="draftOut" class="out"></div>
     </section>
 
     <!-- ③ API 키 설정 -->
     <section class="screen" id="screen-settings">
-      <h1>🔑 API 키 설정</h1>
+      <div class="hero" style="--hero-a:#fbbf24;--hero-b:#d97706">
+        <div class="hero-badge">🔑</div>
+        <div>
+          <div class="eyebrow">Settings</div>
+          <h1>API 키 설정</h1>
+        </div>
+      </div>
       <div class="sub">
         분석·초안 생성 기능은 Gemini API를 사용합니다. 키는 서버로 전송되지 않고
         <b>이 브라우저에만(localStorage)</b> 저장됩니다.
@@ -189,6 +405,16 @@ const KEY_STORAGE = 'naverCafeWriter_gmKey';
 
 const g = id => document.getElementById(id);
 const escH = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+/* 작성 가이드와 동일한 원칙을 AI 프롬프트에도 그대로 사용 (단일 소스) */
+const CAFE_GUIDE_RULES_KR =
+  '[네이버 카페 글쓰기 지침]\n'
+  + '1) 키워드: 블로그·지식인이 아니라 카페 탭이 상위 노출될 가능성이 높은 키워드(커뮤니티성·후기성·동호회성·지역성·고민상담형)를 우선한다.\n'
+  + '2) 제목 공식: [상황/결과] + "직접 인용·구어체" + (부가 설명) 조합. 큰따옴표·쉼표·괄호 같은 문장부호를 자연스럽게 활용한 클릭 유도형. 과장·낚시성 금지.\n'
+  + '3) 본문 구조 5단계: ①오프닝 후킹(2~3문장) → ②공감·상황 설명(키워드 자연 배치) → ③핵심 정보(소제목+목록) → ④경험·근거 제시 → ⑤마무리 CTA(댓글 유도 질문).\n'
+  + '4) 모바일 가독성: 1~2문장마다 줄바꿈, 한 문단 3~4줄 이내, 소제목은 굵게·기호로 구분, 이모지는 절제해서 사용.\n'
+  + '5) 키워드 밀도: 타겟 키워드는 본문 전체에 자연스럽게 2~4회만 사용 (과다 반복 금지, 어뷰징으로 보일 수 있음).\n'
+  + '6) 금지: 과도한 홍보성 단어 반복, 도배성 문구, 출처 없는 이미지·타인 글 도용 암시, 사실과 다른 과장.';
 
 /* ── 화면 전환 ── */
 function switchScreen(name){
@@ -311,17 +537,14 @@ async function runAnalyze(){
   setBusy('analyzeBtn', true, '분석 중…', '🔍 키워드·제목 분석하기');
   out.innerHTML = '<div class="muted">분석 중입니다…</div>';
   try{
-    const sys = '당신은 네이버 카페 트래픽 전략 전문가입니다. 다음 원칙을 기준으로 분석합니다: '
-      + '(1) 네이버 통합검색에서 블로그·지식인이 아니라 카페 탭이 상위 노출될 가능성이 높은 키워드를 고른다 — 대개 커뮤니티성/후기성/동호회성/지역성/증상·고민 상담형 키워드일수록 카페 노출 확률이 높다. '
-      + '(2) 조회수가 잘 나오는 카페 인기글 제목의 패턴(따옴표, 쉼표, 괄호, 숫자, 구어체 등)을 뽑아낸다. '
-      + '(3) 검색노출과 홈판(카페 첫페이지) 노출을 동시에 노릴 수 있는 제목을 제안한다. '
-      + '반드시 JSON 객체 하나만 반환하고 다른 텍스트는 출력하지 마세요.';
+    const sys = '당신은 네이버 카페 트래픽 전략 전문가입니다. ' + CAFE_GUIDE_RULES_KR
+      + '\n반드시 JSON 객체 하나만 반환하고 다른 텍스트는 출력하지 마세요.';
     const userAsk = '주제: ' + topic + '\n'
       + (refTitles ? ('참고 인기글 제목 목록:\n' + refTitles + '\n') : '')
       + '\n아래 스키마의 JSON으로만 답하세요:\n'
       + '{"keywords":[{"keyword":"...", "reason":"카페 탭 노출이 유리한 이유"}] (5~8개),'
       + '"title_patterns":["패턴 설명 문장"] (4~6개, 참고 제목이 있으면 거기서 실제 패턴을 추출),'
-      + '"title_suggestions":["새 제목"] (6~8개, 위 패턴과 키워드를 주제에 적용)}';
+      + '"title_suggestions":["새 제목"] (6~8개, 제목 공식을 주제에 적용)}';
     const text = await geminiCall(gmKey, [{ role:'user', parts:[{text:userAsk}] }], sys, { useSearch:true });
     const obj = robustParseJson(text);
     if(!obj || (!obj.keywords && !obj.title_suggestions)){
@@ -331,7 +554,7 @@ async function runAnalyze(){
     let html = '';
     const kws = Array.isArray(obj.keywords) ? obj.keywords : [];
     if(kws.length){
-      html += '<div class="out-block-title">추천 키워드 (카페 탭 노출 우선)</div><div class="chip-row">';
+      html += '<div class="out-block-title">🔑 추천 키워드 (카페 탭 노출 우선)</div><div class="chip-row">';
       kws.forEach(k=>{
         const kw = escH(k && k.keyword || '');
         const reason = escH(k && k.reason || '');
@@ -342,13 +565,13 @@ async function runAnalyze(){
     }
     const pats = Array.isArray(obj.title_patterns) ? obj.title_patterns : [];
     if(pats.length){
-      html += '<div class="out-block-title">제목 패턴 인사이트</div><ul class="patterns">';
+      html += '<div class="out-block-title">🏷️ 제목 패턴 인사이트</div><ul class="patterns">';
       pats.forEach(p=>{ if(p) html += '<li>' + escH(p) + '</li>'; });
       html += '</ul>';
     }
     const sugg = Array.isArray(obj.title_suggestions) ? obj.title_suggestions : [];
     if(sugg.length){
-      html += '<div class="out-block-title">추천 제목 (클릭하면 「글 초안 생성」으로 이동)</div><div class="title-list">';
+      html += '<div class="out-block-title">✨ 추천 제목 (클릭하면 「글 초안 생성」으로 이동)</div><div class="title-list">';
       sugg.forEach(t=>{
         if(!t) return;
         const tt = escH(t);
@@ -383,17 +606,15 @@ async function runDraft(){
   setBusy('draftBtn', true, '생성 중…', '✍️ 초안 생성하기');
   out.innerHTML = '<div class="muted">초안을 작성 중입니다…</div>';
   try{
-    const sys = '당신은 네이버 카페 인기글을 쓰는 카피라이터입니다. 검색노출(키워드 반영)과 홈판노출(첫 문단 후킹력)을 동시에 노리는 글을 씁니다. '
-      + '제목은 큰따옴표·쉼표·괄호 같은 문장부호와 구어체를 자연스럽게 활용한 클릭 유도형으로 쓰되 낚시성 과장은 피합니다. '
-      + '본문은 (1) 첫 2~3문장에서 강하게 후킹, (2) 타겟 키워드를 본문에 자연스럽게 2~4회 녹이기, (3) 소제목/줄바꿈으로 가독성 확보, (4) 마지막에 댓글·공감을 유도하는 마무리 문장을 포함합니다. '
-      + '반드시 JSON 객체 하나만 반환하세요.';
+    const sys = '당신은 네이버 카페 인기글을 쓰는 카피라이터입니다. ' + CAFE_GUIDE_RULES_KR
+      + '\n본문의 5단계 구조와 가독성 규칙을 그대로 지켜서 작성하세요. 반드시 JSON 객체 하나만 반환하세요.';
     const userAsk = (title ? ('사용자가 고른 제목: ' + title + '\n') : '')
       + (keywords ? ('타겟 키워드: ' + keywords + '\n') : '')
       + '글 톤: ' + toneLabel + '\n'
       + '핵심 내용 메모:\n' + notes + '\n\n'
       + '아래 스키마의 JSON으로만 답하세요:\n'
       + '{"titles":["제목 후보"] (3개, 사용자가 제목을 줬다면 그것을 1번으로 포함하고 다듬은 버전도 함께),'
-      + '"body":"본문 전체 (소제목·줄바꿈 포함, 마크다운 없이 일반 텍스트로, 600~1200자)",'
+      + '"body":"본문 전체 (5단계 구조, 소제목·줄바꿈 포함, 마크다운 없이 일반 텍스트로, 600~1200자)",'
       + '"tags":["추천 태그"] (5~8개),'
       + '"category_hint":"이 글에 어울리는 카페 게시판 성격 한 줄 설명"}';
     const text = await geminiCall(gmKey, [{ role:'user', parts:[{text:userAsk}] }], sys, { json:true, temperature:0.75 });
@@ -405,15 +626,15 @@ async function runDraft(){
     let html = '';
     const titles = Array.isArray(obj.titles) ? obj.titles : (title ? [title] : []);
     if(titles.length){
-      html += '<div class="out-block-title">제목 후보</div><ul class="patterns">';
+      html += '<div class="out-block-title">✨ 제목 후보</div><ul class="patterns">';
       titles.forEach(t=>{ if(t) html += '<li>' + escH(t) + '</li>'; });
       html += '</ul>';
     }
-    html += '<div class="out-block-title">본문 초안</div>';
+    html += '<div class="out-block-title">📄 본문 초안</div>';
     html += `<textarea class="draft-body" readonly rows="12" onclick="this.select()">${escH(obj.body||'')}</textarea>`;
     const tags = Array.isArray(obj.tags) ? obj.tags : [];
     if(tags.length){
-      html += '<div class="muted" style="margin-top:8px">추천 태그: ' + tags.map(t=>'#'+escH(t)).join(' ') + '</div>';
+      html += '<div class="muted" style="margin-top:10px">추천 태그: ' + tags.map(t=>'#'+escH(t)).join(' ') + '</div>';
     }
     if(obj.category_hint){
       html += '<div class="muted" style="margin-top:4px">어울리는 게시판: ' + escH(obj.category_hint) + '</div>';
