@@ -8,17 +8,34 @@
   :root{
     --bg:#020617; --s1:#0f172a; --s2:#0b1830; --border:#25415f;
     --accent:#38bdf8; --a2:#2563eb; --text:#edf7ff; --muted:#6f89a6; --muted2:#9db4ce;
-    --danger:#f87171;
+    --danger:#f87171; --menu-bg:#0a1322; --menu-ico:#182642; --menu-active:#1e293b;
   }
   *{box-sizing:border-box}
-  body{margin:0;background:radial-gradient(1200px 600px at 20% -10%,rgba(56,189,248,.10),transparent),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic",Roboto,sans-serif;line-height:1.5}
-  .wrap{max-width:880px;margin:0 auto;padding:32px 20px 80px}
-  header{margin-bottom:22px}
-  h1{font-size:22px;font-weight:800;margin:0 0 6px;display:flex;align-items:center;gap:8px}
-  .sub{font-size:12.5px;color:var(--muted2);line-height:1.6;max-width:680px}
-  .card{border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:18px;background:rgba(56,189,248,.04)}
-  .card h2{font-size:15px;font-weight:800;color:#f8fafc;margin:0 0 3px}
-  .card .desc{font-size:11.5px;color:var(--muted2);margin-bottom:12px}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic",Roboto,sans-serif;line-height:1.5}
+  .app{display:flex;min-height:100vh}
+
+  /* ── 좌측 메뉴 ── */
+  .menu{width:250px;flex-shrink:0;background:var(--menu-bg);border-right:1px solid var(--border);padding:18px 10px;position:sticky;top:0;height:100vh;overflow-y:auto}
+  .menu-title{font-size:14px;font-weight:800;padding:8px 10px 18px;display:flex;align-items:center;gap:8px}
+  .menu-item{
+    display:flex;align-items:center;gap:12px;padding:10px;border-radius:14px;cursor:pointer;
+    margin-bottom:6px;user-select:none;border:1px solid transparent;
+  }
+  .menu-item:hover:not(.active){background:rgba(255,255,255,.04)}
+  .menu-item.active{background:var(--menu-active);border-color:rgba(56,189,248,.25)}
+  .menu-ico{
+    width:40px;height:40px;border-radius:11px;background:var(--menu-ico);
+    display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;
+  }
+  .menu-label{font-size:13.5px;font-weight:600;color:var(--text)}
+  .menu-item.active .menu-label{color:#f8fafc}
+
+  /* ── 우측 콘텐츠 ── */
+  .content{flex:1;padding:36px 32px 80px;max-width:720px}
+  .screen{display:none}
+  .screen.active{display:block}
+  h1{font-size:20px;font-weight:800;margin:0 0 6px;display:flex;align-items:center;gap:8px}
+  .sub{font-size:12.5px;color:var(--muted2);line-height:1.6;margin-bottom:22px;max-width:600px}
   label{font-size:12px;color:var(--muted2);display:block;margin-bottom:4px;margin-top:10px}
   label:first-of-type{margin-top:0}
   input[type=text],input[type=password],textarea,select{
@@ -28,30 +45,30 @@
   }
   input[type=text]:focus,input[type=password]:focus,textarea:focus,select:focus{border-color:var(--accent)}
   textarea{resize:vertical}
-  .row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
   .btn{
     appearance:none;border:1px solid rgba(56,189,248,.5);
     background:linear-gradient(135deg,rgba(56,189,248,.24),rgba(37,99,235,.2));
     color:#f8fafc;font-weight:800;font-size:13px;padding:10px 16px;border-radius:10px;
-    cursor:pointer;margin-top:12px;
+    cursor:pointer;margin-top:14px;
   }
   .btn:disabled{opacity:.55;cursor:not-allowed}
   .btn.small{font-size:11.5px;padding:7px 12px;border-radius:8px;margin-top:0}
-  .out{margin-top:12px}
+  .out{margin-top:14px}
   .err{font-size:12px;color:var(--danger)}
   .muted{font-size:12px;color:var(--muted2)}
-  .chip-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+  .chip-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
   .chip{
     appearance:none;border:1px solid rgba(56,189,248,.4);background:rgba(56,189,248,.1);
     color:#e0f2fe;font-size:11.5px;padding:6px 10px;border-radius:999px;cursor:pointer;
   }
-  ul.patterns{margin:0 0 12px 18px;padding:0;font-size:12px;color:var(--muted2);line-height:1.7}
+  ul.patterns{margin:0 0 14px 18px;padding:0;font-size:12px;color:var(--muted2);line-height:1.7}
   .title-list{display:flex;flex-direction:column;gap:6px}
   .title-item{
     text-align:left;appearance:none;border:1px solid var(--border);background:var(--s2);
     color:var(--text);font-size:12.5px;padding:9px 12px;border-radius:8px;cursor:pointer;width:100%;
   }
   .title-item:hover{border-color:var(--accent)}
+  .out-block-title{font-size:12.5px;font-weight:700;color:var(--accent);margin-bottom:6px}
   .draft-body{
     width:100%;background:var(--s2);border:1px solid var(--border);border-radius:8px;
     padding:10px 12px;color:var(--text);font-size:12.5px;line-height:1.7;box-sizing:border-box;resize:vertical;
@@ -60,65 +77,110 @@
   .keyrow input{flex:1}
   .badge{font-size:10.5px;padding:3px 8px;border-radius:999px;border:1px solid var(--border);color:var(--muted2)}
   .badge.ok{border-color:rgba(74,222,128,.5);color:#86efac}
-  footer{font-size:11px;color:var(--muted);text-align:center;margin-top:24px}
+  .toast{
+    position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);
+    background:#0f766e;color:#f0fdfa;font-size:12.5px;font-weight:700;padding:10px 18px;
+    border-radius:999px;box-shadow:0 10px 30px rgba(0,0,0,.35);opacity:0;pointer-events:none;
+    transition:opacity .2s,transform .2s;z-index:50;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
   a{color:var(--accent)}
+
+  @media (max-width:760px){
+    .app{flex-direction:column}
+    .menu{
+      width:100%;height:auto;position:static;display:flex;overflow-x:auto;
+      border-right:none;border-bottom:1px solid var(--border);padding:12px 10px;gap:8px;
+    }
+    .menu-title{display:none}
+    .menu-item{flex-direction:column;gap:6px;min-width:78px;text-align:center;margin-bottom:0}
+    .menu-label{font-size:11px}
+    .content{padding:24px 18px 60px}
+  }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <h1>🗒️ 네이버 카페 글쓰기 도우미</h1>
-    <div class="sub">
-      네이버 통합검색에서 <b>블로그·지식인이 아니라 카페 탭이 상위 노출될 가능성이 높은 키워드</b>를 찾고,
-      조회수 잘 나오는 인기글 <b>제목 패턴</b>을 분석한 뒤, 검색노출과 홈판노출을 동시에 노리는
-      <b>글 초안</b>을 만들어 드립니다. 생성된 글은 <b>직접 검토 후 카페에 붙여넣어 게시</b>하는 용도이며,
-      네이버 로그인·자동 게시 기능은 포함되어 있지 않습니다.
+<div class="app">
+  <nav class="menu">
+    <div class="menu-title">🗒️ 카페 글쓰기</div>
+    <div class="menu-item active" data-screen="analyze" onclick="switchScreen('analyze')">
+      <div class="menu-ico">🔍</div>
+      <div class="menu-label">키워드·제목 분석</div>
     </div>
-  </header>
-
-  <div class="card">
-    <h2>🔑 Gemini API 키</h2>
-    <div class="desc">이 브라우저에만 저장됩니다(localStorage). <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>에서 무료로 발급받을 수 있습니다.</div>
-    <div class="keyrow">
-      <input type="password" id="gmKey" placeholder="AIza...">
-      <button type="button" class="btn small" onclick="toggleKeyVisibility()" id="toggleKeyBtn">보기</button>
-      <span class="badge" id="keyBadge">미입력</span>
+    <div class="menu-item" data-screen="draft" onclick="switchScreen('draft')">
+      <div class="menu-ico">✍️</div>
+      <div class="menu-label">글 초안 생성</div>
     </div>
-  </div>
+    <div class="menu-item" data-screen="settings" onclick="switchScreen('settings')">
+      <div class="menu-ico">🔑</div>
+      <div class="menu-label">API 키 설정</div>
+    </div>
+  </nav>
 
-  <div class="card">
-    <h2>① 키워드 &amp; 제목 패턴 분석</h2>
-    <div class="desc">카페 탭 노출이 유리한 키워드와 인기글 제목 패턴을 뽑아냅니다.</div>
-    <label>주제/토픽 <span style="color:var(--danger)">*</span></label>
-    <input type="text" id="topic" placeholder="예: 다이어트 식단, 강아지 분리불안, 전세 계약 주의사항">
-    <label>참고할 인기글 제목 (있다면, 한 줄에 하나씩 — 선택)</label>
-    <textarea id="refTitles" rows="3" placeholder="예&#10;저도 이거 3개월만에 -8kg 뺐어요 (feat.식단표)&#10;&quot;이거 모르면 손해&quot; 다이어트 식단 꿀팁 총정리"></textarea>
-    <button type="button" class="btn" id="analyzeBtn" onclick="runAnalyze()">🔍 키워드·제목 분석하기</button>
-    <div id="analyzeOut" class="out"></div>
-  </div>
+  <main class="content">
 
-  <div class="card">
-    <h2>② 글 초안 생성</h2>
-    <div class="desc">검색노출과 홈판노출을 동시에 노리는 제목 후보 + 본문 초안을 만듭니다. 위 분석 결과의 제목/키워드를 그대로 가져와도 됩니다.</div>
-    <label>제목 (비워두면 자동 제안)</label>
-    <input type="text" id="draftTitle" placeholder="분석에서 고른 제목을 붙여넣거나 직접 입력">
-    <label>타겟 키워드 (쉼표로 구분)</label>
-    <input type="text" id="draftKeywords" placeholder="예: 다이어트 식단, 저탄수 식단표">
-    <label>글 톤/성격</label>
-    <select id="tone">
-      <option value="review">후기형 (내 경험담·솔직 후기)</option>
-      <option value="tip">꿀팁형 (정보 총정리)</option>
-      <option value="qna">Q&amp;A형 (질문·고민 상담)</option>
-      <option value="community">커뮤니티 친근체 (반말·공감 톤)</option>
-    </select>
-    <label>핵심 내용 메모 (알고 있는 사실·경험을 자유롭게) <span style="color:var(--danger)">*</span></label>
-    <textarea id="draftNotes" rows="4" placeholder="글에 꼭 들어갔으면 하는 내용을 메모하세요. 구체적일수록 좋습니다."></textarea>
-    <button type="button" class="btn" id="draftBtn" onclick="runDraft()">✍️ 초안 생성하기</button>
-    <div id="draftOut" class="out"></div>
-  </div>
+    <!-- ① 키워드·제목 분석 -->
+    <section class="screen active" id="screen-analyze">
+      <h1>🔍 키워드·제목 분석</h1>
+      <div class="sub">
+        네이버 통합검색에서 <b>블로그·지식인이 아니라 카페 탭이 상위 노출될 가능성이 높은 키워드</b>를 찾고,
+        조회수 잘 나오는 인기글 <b>제목 패턴</b>을 분석해 새 제목을 제안합니다.
+      </div>
+      <label>주제/토픽 <span style="color:var(--danger)">*</span></label>
+      <input type="text" id="topic" placeholder="예: 다이어트 식단, 강아지 분리불안, 전세 계약 주의사항">
+      <label>참고할 인기글 제목 (있다면, 한 줄에 하나씩 — 선택)</label>
+      <textarea id="refTitles" rows="3" placeholder="예&#10;저도 이거 3개월만에 -8kg 뺐어요 (feat.식단표)&#10;&quot;이거 모르면 손해&quot; 다이어트 식단 꿀팁 총정리"></textarea>
+      <button type="button" class="btn" id="analyzeBtn" onclick="runAnalyze()">🔍 키워드·제목 분석하기</button>
+      <div id="analyzeOut" class="out"></div>
+    </section>
 
-  <footer>본 페이지는 초안 작성을 돕는 도구이며, 실제 게시 여부와 내용 책임은 사용자 본인에게 있습니다.</footer>
+    <!-- ② 글 초안 생성 -->
+    <section class="screen" id="screen-draft">
+      <h1>✍️ 글 초안 생성</h1>
+      <div class="sub">
+        검색노출과 홈판노출을 동시에 노리는 제목 후보 + 본문 초안을 만듭니다.
+        「키워드·제목 분석」에서 고른 제목/키워드가 있다면 아래에 자동으로 채워집니다.
+      </div>
+      <label>제목 (비워두면 자동 제안)</label>
+      <input type="text" id="draftTitle" placeholder="분석에서 고른 제목을 붙여넣거나 직접 입력">
+      <label>타겟 키워드 (쉼표로 구분)</label>
+      <input type="text" id="draftKeywords" placeholder="예: 다이어트 식단, 저탄수 식단표">
+      <label>글 톤/성격</label>
+      <select id="tone">
+        <option value="review">후기형 (내 경험담·솔직 후기)</option>
+        <option value="tip">꿀팁형 (정보 총정리)</option>
+        <option value="qna">Q&amp;A형 (질문·고민 상담)</option>
+        <option value="community">커뮤니티 친근체 (반말·공감 톤)</option>
+      </select>
+      <label>핵심 내용 메모 (알고 있는 사실·경험을 자유롭게) <span style="color:var(--danger)">*</span></label>
+      <textarea id="draftNotes" rows="4" placeholder="글에 꼭 들어갔으면 하는 내용을 메모하세요. 구체적일수록 좋습니다."></textarea>
+      <button type="button" class="btn" id="draftBtn" onclick="runDraft()">✍️ 초안 생성하기</button>
+      <div id="draftOut" class="out"></div>
+    </section>
+
+    <!-- ③ API 키 설정 -->
+    <section class="screen" id="screen-settings">
+      <h1>🔑 API 키 설정</h1>
+      <div class="sub">
+        분석·초안 생성 기능은 Gemini API를 사용합니다. 키는 서버로 전송되지 않고
+        <b>이 브라우저에만(localStorage)</b> 저장됩니다.
+        <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>에서 무료로 발급받을 수 있습니다.
+      </div>
+      <label>Gemini API 키</label>
+      <div class="keyrow">
+        <input type="password" id="gmKey" placeholder="AIza...">
+        <button type="button" class="btn small" onclick="toggleKeyVisibility()" id="toggleKeyBtn">보기</button>
+        <span class="badge" id="keyBadge">미입력</span>
+      </div>
+    </section>
+
+    <div style="font-size:11px;color:var(--muted);margin-top:34px">
+      본 페이지는 초안 작성을 돕는 도구이며, 실제 게시 여부와 내용 책임은 사용자 본인에게 있습니다.
+    </div>
+  </main>
 </div>
+
+<div class="toast" id="toast"></div>
 
 <script>
 const GM = 'https://generativelanguage.googleapis.com/v1beta';
@@ -128,6 +190,22 @@ const KEY_STORAGE = 'naverCafeWriter_gmKey';
 const g = id => document.getElementById(id);
 const escH = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
+/* ── 화면 전환 ── */
+function switchScreen(name){
+  document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === 'screen-' + name));
+  document.querySelectorAll('.menu-item').forEach(m => m.classList.toggle('active', m.dataset.screen === name));
+}
+
+let toastTimer = null;
+function showToast(msg){
+  const t = g('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+/* ── API 키 ── */
 function loadKey(){
   try{
     const v = localStorage.getItem(KEY_STORAGE) || '';
@@ -204,15 +282,18 @@ async function geminiCall(gmKey, contents, systemText, opts){
   throw new Error(lastMsg || 'Gemini 호출 실패');
 }
 
+/* ── ①→② 결과 전달 ── */
 function useTitle(title){
   g('draftTitle').value = title;
-  g('draftTitle').scrollIntoView({behavior:'smooth', block:'center'});
+  switchScreen('draft');
+  showToast('제목이 「글 초안 생성」에 복사되었습니다');
 }
 function useKeyword(kw){
   const f = g('draftKeywords');
   const cur = String(f.value||'').split(',').map(s=>s.trim()).filter(Boolean);
   if(kw && cur.indexOf(kw)===-1) cur.push(kw);
   f.value = cur.join(', ');
+  showToast('키워드가 「글 초안 생성」에 추가되었습니다');
 }
 
 async function runAnalyze(){
@@ -221,7 +302,10 @@ async function runAnalyze(){
   const refTitles = String(g('refTitles').value||'').trim();
   if(!topic){ out.innerHTML = '<div class="err">주제를 먼저 입력해 주세요.</div>'; return; }
   const gmKey = gmKeyValue();
-  if(!gmKey){ out.innerHTML = '<div class="err">Gemini API 키를 먼저 입력해 주세요.</div>'; return; }
+  if(!gmKey){
+    out.innerHTML = '<div class="err">Gemini API 키를 먼저 입력해 주세요. <a href="javascript:void(0)" onclick="switchScreen(\'settings\')">API 키 설정으로 이동</a></div>';
+    return;
+  }
   try{ localStorage.setItem(KEY_STORAGE, gmKey); updateKeyBadge(); }catch(e){}
 
   setBusy('analyzeBtn', true, '분석 중…', '🔍 키워드·제목 분석하기');
@@ -247,7 +331,7 @@ async function runAnalyze(){
     let html = '';
     const kws = Array.isArray(obj.keywords) ? obj.keywords : [];
     if(kws.length){
-      html += '<div style="font-size:12.5px;font-weight:700;color:var(--accent);margin-bottom:6px">추천 키워드 (카페 탭 노출 우선)</div><div class="chip-row">';
+      html += '<div class="out-block-title">추천 키워드 (카페 탭 노출 우선)</div><div class="chip-row">';
       kws.forEach(k=>{
         const kw = escH(k && k.keyword || '');
         const reason = escH(k && k.reason || '');
@@ -258,13 +342,13 @@ async function runAnalyze(){
     }
     const pats = Array.isArray(obj.title_patterns) ? obj.title_patterns : [];
     if(pats.length){
-      html += '<div style="font-size:12.5px;font-weight:700;color:var(--accent);margin-bottom:6px">제목 패턴 인사이트</div><ul class="patterns">';
+      html += '<div class="out-block-title">제목 패턴 인사이트</div><ul class="patterns">';
       pats.forEach(p=>{ if(p) html += '<li>' + escH(p) + '</li>'; });
       html += '</ul>';
     }
     const sugg = Array.isArray(obj.title_suggestions) ? obj.title_suggestions : [];
     if(sugg.length){
-      html += '<div style="font-size:12.5px;font-weight:700;color:var(--accent);margin-bottom:6px">추천 제목 (클릭하면 ②로 복사)</div><div class="title-list">';
+      html += '<div class="out-block-title">추천 제목 (클릭하면 「글 초안 생성」으로 이동)</div><div class="title-list">';
       sugg.forEach(t=>{
         if(!t) return;
         const tt = escH(t);
@@ -289,7 +373,10 @@ async function runDraft(){
   if(!keywords && !title){ out.innerHTML = '<div class="err">제목이나 타겟 키워드 중 하나는 입력해 주세요.</div>'; return; }
   if(!notes){ out.innerHTML = '<div class="err">핵심 내용 메모를 입력해 주세요 (글의 재료가 필요합니다).</div>'; return; }
   const gmKey = gmKeyValue();
-  if(!gmKey){ out.innerHTML = '<div class="err">Gemini API 키를 먼저 입력해 주세요.</div>'; return; }
+  if(!gmKey){
+    out.innerHTML = '<div class="err">Gemini API 키를 먼저 입력해 주세요. <a href="javascript:void(0)" onclick="switchScreen(\'settings\')">API 키 설정으로 이동</a></div>';
+    return;
+  }
   try{ localStorage.setItem(KEY_STORAGE, gmKey); updateKeyBadge(); }catch(e){}
 
   const toneLabel = { review:'후기형(내 경험담·솔직 후기)', tip:'꿀팁형(정보 총정리)', qna:'Q&A형(질문·고민 상담)', community:'커뮤니티 친근체(반말·공감 톤)' }[tone] || '후기형';
@@ -318,11 +405,11 @@ async function runDraft(){
     let html = '';
     const titles = Array.isArray(obj.titles) ? obj.titles : (title ? [title] : []);
     if(titles.length){
-      html += '<div style="font-size:12.5px;font-weight:700;color:var(--accent);margin-bottom:6px">제목 후보</div><ul class="patterns">';
+      html += '<div class="out-block-title">제목 후보</div><ul class="patterns">';
       titles.forEach(t=>{ if(t) html += '<li>' + escH(t) + '</li>'; });
       html += '</ul>';
     }
-    html += '<div style="font-size:12.5px;font-weight:700;color:var(--accent);margin-bottom:6px">본문 초안</div>';
+    html += '<div class="out-block-title">본문 초안</div>';
     html += `<textarea class="draft-body" readonly rows="12" onclick="this.select()">${escH(obj.body||'')}</textarea>`;
     const tags = Array.isArray(obj.tags) ? obj.tags : [];
     if(tags.length){
