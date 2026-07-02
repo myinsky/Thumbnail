@@ -55830,6 +55830,67 @@ window.addEventListener('resize',function(){
   color:var(--text);font-size:11.5px;font-weight:800;cursor:pointer;
 }
 #screen3 .vg-sb-history-btn:hover{border-color:var(--accent);}
+
+/* 확정 문구 입력 카드 — 스타일 갤러리와 톤을 맞춘 프리미엄 리스킨 */
+#ctBox.confirmed-title-box{
+  background:linear-gradient(160deg,rgba(15,23,42,.94),rgba(7,12,23,.98))!important;
+  border:1px solid rgba(56,189,248,.35)!important;
+  box-shadow:0 0 0 1px rgba(56,189,248,.10),0 18px 40px rgba(2,6,23,.42)!important;
+  border-radius:16px!important;
+  padding:18px 18px 16px!important;
+  position:relative!important;
+}
+#ctBox.confirmed-title-box::before{
+  content:"✍️ 문구 · 설명 입력";
+  display:block;
+  font-size:13px;font-weight:900;color:#fff;
+  margin-bottom:12px;letter-spacing:-.01em;
+}
+#ctBox .vg-ctb-field{position:relative;}
+#ctBox .vg-ctb-badge{
+  position:absolute;left:11px;top:50%;transform:translateY(-50%);
+  width:22px;height:22px;border-radius:50%;
+  background:linear-gradient(135deg,#38bdf8,#2563eb);
+  color:#04101c;font-size:11px;font-weight:900;
+  display:flex;align-items:center;justify-content:center;
+  z-index:2;pointer-events:none;
+  box-shadow:0 2px 6px rgba(2,6,23,.4);
+}
+#ctBox .vg-ctb-field .ctb-main,
+#ctBox .vg-ctb-field .ctb-mid,
+#ctBox .vg-ctb-field .ctb-short{
+  padding-left:42px!important;
+  border-radius:12px!important;
+  transition:border-color .15s ease,box-shadow .15s ease;
+}
+#ctBox .vg-ctb-field .ctb-main:focus,
+#ctBox .vg-ctb-field .ctb-mid:focus,
+#ctBox .vg-ctb-field .ctb-short:focus{
+  border-color:var(--accent)!important;
+  box-shadow:0 0 0 3px rgba(56,189,248,.18)!important;
+  outline:none!important;
+}
+#ctBox .ctb-context-lbl{
+  font-size:11.5px!important;font-weight:800!important;color:var(--muted2)!important;
+  font-family:var(--font)!important;text-transform:none!important;letter-spacing:0!important;
+}
+#ctBox .ctb-sync-action-btn{
+  background:linear-gradient(135deg,#0ea5e9,#2563eb)!important;color:#fff!important;
+  border:none!important;border-radius:9px!important;font-weight:800!important;
+  box-shadow:0 4px 12px rgba(14,165,233,.28)!important;
+}
+#ctBox .ctb-context{border-radius:12px!important;}
+#ctBox .ctb-context:focus{
+  border-color:var(--accent)!important;
+  box-shadow:0 0 0 3px rgba(56,189,248,.16)!important;
+}
+#ctBox .ctb-context-meta{
+  display:inline-block!important;padding:3px 9px!important;border-radius:999px!important;
+  background:rgba(56,189,248,.10)!important;border:1px solid rgba(56,189,248,.22)!important;
+  color:var(--accent-strong)!important;
+}
+/* 카드 자체 헤더(::before)로 대체 — 중복되는 기존 "확정문구 입력" 라벨은 숨김 */
+#ctBox > .ctb-label.ctb-label-strong.ctb-label--compact{display:none!important;}
 </style>
 <script>
 (function(){
@@ -56146,11 +56207,44 @@ window.addEventListener('resize',function(){
     }, 1500);
   }
 
+  var CTB_PLACEHOLDERS = ['예: 도대체 무슨 일이 있었던 걸까?','예: 아무도 몰랐던 반전','예: 끝까지 보세요'];
+  function enhanceConfirmedTitleBox(){
+    var box = document.getElementById('ctBox');
+    if(!box) return;
+    var ids = ['ctbMain','ctbMid','ctbShort'];
+    var any = false;
+    ids.forEach(function(id, idx){
+      var input = document.getElementById(id);
+      if(!input || input.__vgBadged) return;
+      any = true;
+      input.__vgBadged = true;
+      if(!input.getAttribute('placeholder')) input.setAttribute('placeholder', CTB_PLACEHOLDERS[idx] || '');
+      var wrap = document.createElement('div');
+      wrap.className = 'vg-ctb-field';
+      input.parentNode.insertBefore(wrap, input);
+      wrap.appendChild(input);
+      var badge = document.createElement('span');
+      badge.className = 'vg-ctb-badge';
+      badge.textContent = String(idx + 1);
+      wrap.insertBefore(badge, input);
+    });
+    return any;
+  }
+  function installConfirmedTitleBoxObserver(){
+    var box = document.getElementById('ctBox');
+    if(!box || box.__vgObserved) return;
+    box.__vgObserved = true;
+    enhanceConfirmedTitleBox();
+    var mo = new MutationObserver(function(){ enhanceConfirmedTitleBox(); });
+    mo.observe(box, { childList:true, subtree:true });
+  }
+
   function init(){
     enhanceCards();
     enhancePresetGrid();
     buildToolbar();
     buildStatusBar();
+    installConfirmedTitleBoxObserver();
     updatePreview('cinematic');
     try{
       if(typeof applyVisualStyleUiFromKey === 'function' && !applyVisualStyleUiFromKey.__vgWrapped){
