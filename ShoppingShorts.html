@@ -8129,8 +8129,14 @@ async function runAutoVideoPipeline(){
   setStatus('auto-gen','loading','① 대본 맞춰 화면·구도 구성 중...');
   applyShotPlanToScript();
 
-  setStatus('auto-gen','loading','② 등장인물 생성 중...');
-  await generateAllCastAndOptionalProps();
+  const isStoryAuto = state.scriptMode === 'story' && state.selectedStoryPlan != null;
+  if(isStoryAuto){
+    setStatus('auto-gen','loading','② 이야기에서 주인공·조연·소품 분석 후 캐릭터 생성 중...');
+    await runAutoAnalyzeAndDrawAllCast();
+  }else{
+    setStatus('auto-gen','loading','② 등장인물 생성 중...');
+    await generateAllCastAndOptionalProps();
+  }
   state.done.character = true;
 
   setStatus('auto-gen','loading',`③ 씬 이미지 생성 중 (0/${state.visualGroups.length})...`);
@@ -13901,12 +13907,22 @@ function selectedStoryPlanData(){
   return plan ? normalizeStoryPlanForCinema(plan, state.selectedStoryPlan) : null;
 }
 
+function originalUserBriefExcerpt(maxLen=520){
+  const parts = [
+    compactStoryText(state.storyInput || ''),
+    compactStoryText(state.productDescription || ''),
+  ].filter(Boolean);
+  if(!parts.length) return '';
+  const joined = parts.join(' // ');
+  return joined.length > maxLen ? joined.slice(0, maxLen) + '…' : joined;
+}
+
 function buildStoryVisualContext(group=null){
   const plan = selectedStoryPlanData();
   if(!plan) return '';
   return joinStoryParts([
     '작품 제목: ' + plan.title,
-    '사용자 원문: ' + compactStoryText(state.storyInput || ''),
+    '사용자 원문: ' + originalUserBriefExcerpt(),
     '로그라인: ' + plan.logline,
     plan.synopsis ? '재구성한 시놉시스: ' + plan.synopsis : '',
     plan.tone ? '톤/장르: ' + plan.tone : '',
@@ -13937,6 +13953,31 @@ function storyPlanMetaHtml(plan){
   return parts.join('');
 }
 
+function heroSuggestionFromStoryPlan(plan){
+  if(!plan) return null;
+  const protagonist = compactStoryText(plan.protagonist || '');
+  const look = compactStoryText(plan.protagonistLook || plan.visualContinuity || protagonist);
+  const wardrobe = compactStoryText(plan.protagonistWardrobe || plan.wardrobe || plan.visualContinuity);
+  const desire = compactStoryText(plan.protagonistDesire || plan.desire || plan.logline);
+  const conflict = compactStoryText(plan.centralConflict || plan.conflict);
+  const arc = compactStoryText(plan.arc || plan.twistOrPayoff);
+  const vibe = compactStoryText(plan.tone || plan.genre);
+  return sanitizeCharacterSuggestion({
+    id: 'hero',
+    label: compactStoryText(plan.protagonistName || (protagonist.split(/[,·—-]/)[0] || '주인공').slice(0, 30)) || '주인공',
+    gender: 'neutral',
+    roleInStory: compactStoryText(plan.protagonistRole || protagonist || '주인공'),
+    desire,
+    conflict,
+    arc,
+    vibe,
+    look,
+    identityLock: look,
+    wardrobe,
+    signatureProp: '',
+  });
+}
+
 function selectStoryPlanForProduction(index){
   const plan = normalizeStoryPlanForCinema(state.storyPlans?.[index], index);
   if(!plan?.scriptTable?.length) throw new Error('선택한 기획안에 대본 씬이 없어요.');
@@ -13947,6 +13988,11 @@ function selectStoryPlanForProduction(index){
   state.scriptTable = plan.scriptTable;
   state.visualStyle = 'narrative';
   state.shotPlanReady = false;
+  const heroSug = heroSuggestionFromStoryPlan(plan);
+  if(heroSug){
+    state.charSuggestions = [heroSug];
+    state.selectedCharSuggestion = heroSug;
+  }
   applyShotPlanToScript();
   state.done.script = true;
   return plan;
@@ -16518,7 +16564,11 @@ async function callHiggsfieldSceneImage(group, character){
         group.negativePrompt || '',
         '한 장면만 선명하게, 영화 촬영 현장의 실제 한 프레임처럼.'
       ].filter(Boolean).join(' ')
-    : '세로 숏폼 영화형 제품 장면 스틸컷. 제품이 사건을 만들거나 해결하는 실제 장면이어야 한다. ' + cinematicReelGrammarPrompt() + ' ' + group.visual + '. ' + styleNote + (shotNote?'. '+shotNote:'') + '. 아트 스타일: ' + artNote + '. 입력 참고 이미지의 인물 얼굴·헤어·복장을 그대로 유지(장면마다 다른 사람으로 바꾸지 말 것). ' + (assetNote?assetNote+'. ':'') + '화면에 텍스트·자막·워터마크·로고 삽입 금지. 빠른 컷 편집용 명확한 한 장면.';
+    : (function(){
+        const userBrief = originalUserBriefExcerpt();
+        const briefLine = userBrief ? '원본 사용자 입력: ' + userBrief + '. ' : '';
+        return '세로 숏폼 영화형 제품 장면 스틸컷. 제품이 사건을 만들거나 해결하는 실제 장면이어야 한다. ' + cinematicReelGrammarPrompt() + ' ' + briefLine + group.visual + '. ' + styleNote + (shotNote?'. '+shotNote:'') + '. 아트 스타일: ' + artNote + '. 입력 참고 이미지의 인물 얼굴·헤어·복장을 그대로 유지(장면마다 다른 사람으로 바꾸지 말 것). ' + (assetNote?assetNote+'. ':'') + '화면에 텍스트·자막·워터마크·로고 삽입 금지. 빠른 컷 편집용 명확한 한 장면.';
+      })();
   const refs = getConsistencyRefUrls({ extra: [...(refUrls||[]), character?.imageUrl].filter(Boolean), includeHeldProps:true, propFirst:true, max:4 });
   const { model, args } = buildHfImageArgs(prompt, { refs });
   const output = await hfSubmit(model, args, { fallbackModels: HF_IMAGE_MODEL_FALLBACKS });
