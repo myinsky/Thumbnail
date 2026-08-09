@@ -8117,13 +8117,32 @@ async function runAutoVideoPipeline(){
 
   // 나레이션은 사용자가 켠 경우만. 효과음은 기본 자동.
   if(!state.includeNarration) state.keys.narrationMode = 'off';
-  const narrationMode = state.includeNarration ? (state.keys.narrationMode || 'auto') : 'off';
-  const dialogueRows = narrationMode === 'always'
+  let narrationMode = state.includeNarration ? (state.keys.narrationMode || 'auto') : 'off';
+  let dialogueRows = narrationMode === 'always'
     ? (state.scriptTable||[]).map((r,i)=>({...r,_i:i})).filter(r=>String(r.line||'').trim())
     : getDialogueRows(state.scriptTable);
-  const needVoice = narrationMode !== 'off' && dialogueRows.length > 0;
-  if(needVoice && !state.externalVoiceUrl && !resolveTypecastVoiceId() && !state.keys.googleTtsApiKey && !(state.keys.hfAudioModel && state.keys.hfAudioVoiceId)){
-    throw new Error('대사 씬이 있는데 보이스가 없어요. 외부 음성을 올리거나 Typecast 목소리를 고르거나 나레이션을 「끔」으로 두세요.');
+  let needVoice = narrationMode !== 'off' && dialogueRows.length > 0;
+  const hasAnyVoiceSource = !!state.externalVoiceUrl || !!resolveTypecastVoiceId() || !!state.keys.googleTtsApiKey || !!(state.keys.hfAudioModel && state.keys.hfAudioVoiceId);
+  if(needVoice && !hasAnyVoiceSource){
+    const isStoryAutoRun = state.scriptMode === 'story' && state.selectedStoryPlan != null;
+    if(isStoryAutoRun){
+      // 스토리 자동 흐름은 보이스 세팅 기회 없이 진입하므로 대사 씬을 sfx로 강등해 파이프라인을 살린다.
+      (state.scriptTable||[]).forEach(r=>{
+        if(String(r.line||'').trim() && r.audio !== 'sfx'){
+          r.audio = 'sfx';
+          if(!r.caption || !String(r.caption).trim()) r.caption = String(r.line||'').trim();
+          if(!r.captionStyle || r.captionStyle === 'none') r.captionStyle = 'bottom';
+        }
+      });
+      state.keys.narrationMode = 'off';
+      state.includeNarration = false;
+      narrationMode = 'off';
+      dialogueRows = [];
+      needVoice = false;
+      setStatus('auto-gen','loading','보이스 소스가 없어 대사 씬을 효과음+자막으로 자동 전환했어요.');
+    }else{
+      throw new Error('대사 씬이 있는데 보이스가 없어요. 외부 음성을 올리거나 Typecast 목소리를 고르거나 나레이션을 「끔」으로 두세요.');
+    }
   }
 
   setStatus('auto-gen','loading','① 대본 맞춰 화면·구도 구성 중...');
@@ -8140,24 +8159,62 @@ async function runAutoVideoPipeline(){
   state.done.character = true;
 
   setStatus('auto-gen','loading',`③ 씬 이미지 생성 중 (0/${state.visualGroups.length})...`);
-  state.sceneImages = [];
+  if(!Array.isArray(state.sceneImages)) state.sceneImages = [];
+  if(state.sceneImages.length !== state.visualGroups.length){
+    state.sceneImages = new Array(state.visualGroups.length).fill(null).map((_, i)=> state.sceneImages[i] || null);
+  }
+  const sceneFailures = [];
   for(let i=0;i<state.visualGroups.length;i++){
-    const img = await callHiggsfieldSceneImage(state.visualGroups[i], state.character);
-    state.sceneImages.push(img);
+    if(state.sceneImages[i]?.url){
+      setStatus('auto-gen','loading',`③ 씬 이미지 재사용 (${i+1}/${state.visualGroups.length})...`);
+      continue;
+    }
+    try{
+      const img = await callHiggsfieldSceneImage(state.visualGroups[i], state.character);
+      state.sceneImages[i] = img;
+    }catch(err){
+      console.warn('씬 이미지 실패 (scene ' + (i+1) + '):', err?.message || err);
+      state.sceneImages[i] = null;
+      sceneFailures.push({ index:i, kind:'image', message:String(err?.message||err) });
+    }
     setStatus('auto-gen','loading',`③ 씬 이미지 생성 중 (${i+1}/${state.visualGroups.length})...`);
   }
-  state.done.images = true;
+  const okImageCount = state.sceneImages.filter(s=>s?.url).length;
+  if(!okImageCount) throw new Error('모든 씬 이미지 생성이 실패했어요. Higgsfield 응답을 확인하세요.');
+  state.done.images = okImageCount === state.visualGroups.length;
 
   setStatus('auto-gen','loading',`④ 영상 클립 생성 중 (0/${state.sceneImages.length})...`);
-  state.clips = [];
+  if(!Array.isArray(state.clips)) state.clips = [];
+  if(state.clips.length !== state.sceneImages.length){
+    state.clips = new Array(state.sceneImages.length).fill(null).map((_, i)=> state.clips[i] || null);
+  }
   for(let i=0;i<state.sceneImages.length;i++){
-    const clip = await callHiggsfieldMotion(state.sceneImages[i], state.visualGroups[i]);
-    state.clips.push(clip);
+    if(!state.sceneImages[i]?.url){
+      state.clips[i] = null;
+      continue;
+    }
+    if(state.clips[i]?.url){
+      setStatus('auto-gen','loading',`④ 클립 재사용 (${i+1}/${state.sceneImages.length})...`);
+      continue;
+    }
+    try{
+      const clip = await callHiggsfieldMotion(state.sceneImages[i], state.visualGroups[i]);
+      state.clips[i] = clip;
+    }catch(err){
+      console.warn('클립 실패 (scene ' + (i+1) + '):', err?.message || err);
+      state.clips[i] = null;
+      sceneFailures.push({ index:i, kind:'clip', message:String(err?.message||err) });
+    }
     setStatus('auto-gen','loading',`④ 영상 클립 생성 중 (${i+1}/${state.sceneImages.length})...`);
   }
-  state.done.video = true;
+  const okClipCount = state.clips.filter(c=>c?.url).length;
+  if(!okClipCount) throw new Error('모든 클립 생성이 실패했어요. 씬 이미지는 있지만 모션 API에서 실패했습니다.');
+  state.done.video = okClipCount === state.sceneImages.length;
 
-  state.sourceVideos = state.clips.slice(0, MAX_SOURCE_VIDEOS).map((c,i)=>({
+  state.sceneFailures = sceneFailures;
+
+  const usableClips = state.clips.filter(c=>c?.url);
+  state.sourceVideos = usableClips.slice(0, MAX_SOURCE_VIDEOS).map((c,i)=>({
     file: null, name: `AI클립_${i+1}.mp4`, url: c.url, isRemote: true, isImage: false,
   }));
 
@@ -8265,10 +8322,12 @@ async function runAutoVideoPipeline(){
   state.current = 'studio';
   const bubbleN = (state.subtitles||[]).filter(s=>s.captionStyle==='bubble').length;
   const sfxN = (state.sfxClips||[]).length;
+  const failN = (state.sceneFailures||[]).length;
+  const failNote = failN ? ` · 실패 ${failN}개 (다시 실행하면 성공한 씬은 재사용)` : '';
   const msg = needVoice
-    ? `완료! ${state.externalVoiceUrl?'외부 음성':voiceName} · 대사 ${dialogueLines.length}줄 · 자막 ${(state.subtitles||[]).length}개 · 효과음 ${sfxN}`
-    : `완료! 나레이션 없음 · 자동 효과음 ${sfxN}개 · 자막 ${(state.subtitles||[]).length}개`;
-  setStatus('auto-gen','ok', msg);
+    ? `완료! ${state.externalVoiceUrl?'외부 음성':voiceName} · 대사 ${dialogueLines.length}줄 · 자막 ${(state.subtitles||[]).length}개 · 효과음 ${sfxN}${failNote}`
+    : `완료! 나레이션 없음 · 자동 효과음 ${sfxN}개 · 자막 ${(state.subtitles||[]).length}개${failNote}`;
+  setStatus('auto-gen', 'ok', msg);
 }
 
 function collectSettingsFromInputs(){
@@ -13745,7 +13804,7 @@ function normalizeStorySceneRow(row, index, total, plan, sourceInput){
   const musicCue = compactStoryText(raw.musicCue || raw.bgmCue || raw.bgm || raw.music || '');
   const editRhythm = compactStoryText(raw.editRhythm || raw.rhythm || raw.pace || '');
   const spectacle = compactStoryText(raw.spectacle || raw.genreBlend || raw.genre || raw.visualImpact || '');
-  const imagePrompt = compactStoryText(raw.imagePrompt || raw.prompt || joinStoryParts([
+  const rawImagePrompt = compactStoryText(raw.imagePrompt || raw.prompt || joinStoryParts([
     visual,
     dramaticFunction,
     emotion,
@@ -13757,6 +13816,10 @@ function normalizeStorySceneRow(row, index, total, plan, sourceInput){
     musicCue ? '음악무드:' + musicCue : '',
     spectacle ? '장르융합:' + spectacle : ''
   ]));
+  const sourceQuote = compactStoryText(sourceInput).slice(0, 240);
+  const imagePrompt = (sourceQuote && !rawImagePrompt.includes(sourceQuote.slice(0, 20)))
+    ? rawImagePrompt + ' · 원본 스토리 기반: ' + sourceQuote
+    : rawImagePrompt;
   return {
     ...raw,
     scene: Number(raw.scene) || index + 1,
@@ -14017,14 +14080,19 @@ function cinematicReelGrammarPrompt(){
   ].join('\n');
 }
 
-// 스토리 아이디어 하나를 넣으면, 서로 다른 느낌의 미니 영화 기획안 3가지를 만들어줌
-async function callGeminiStoryPlans(){
-  const idea = compactStoryText(state.storyInput || '');
+const STORY_PLAN_VARIANTS = [
+  { key:'stable',   label:'추천안',     desc:'가장 안정적인 추천안. 빠른 전개와 사운드 리듬 균형' },
+  { key:'action',   label:'액션 강화안', desc:'액션/서스펜스 강화안. 추격, 충격, 반전, 텐션 상승' },
+  { key:'fantasy',  label:'감정 강화안', desc:'판타지/코믹/드라마 강화안. 놀라운 장면과 감정적 여운' },
+];
+
+async function callGeminiStoryPlanOne(idea, variantIdx){
+  const variant = STORY_PLAN_VARIANTS[variantIdx] || STORY_PLAN_VARIANTS[0];
   const system = [
     '당신은 대사가 거의 없는 숏폼 미니 영화의 스토리보드 감독이자 사운드 디자이너다.',
     '핵심은 대사가 아니라 장면, 효과음, 배경음악 리듬, 빠른 전개, 놀라운 비주얼 임팩트의 조화다.',
     '판타지, 코믹, 액션, 서스펜스, 드라마를 장면별로 필요한 만큼 융합한다.',
-    '반드시 유효한 JSON 배열만 출력한다. markdown, 설명, 주석, trailing comma 금지.',
+    '반드시 유효한 JSON 오브젝트 하나만 출력한다. markdown, 설명, 주석, trailing comma 금지.',
     '문자열 안에는 큰따옴표를 쓰지 말고 작은따옴표나 생략 표현을 사용한다.',
     '모든 문자열 값은 한 줄로 짧게 쓴다.'
   ].join('\n');
@@ -14032,14 +14100,12 @@ async function callGeminiStoryPlans(){
     '사용자 줄거리 또는 아이디어:',
     idea,
     '',
-    '위 아이디어를 15~30초 세로형 미니 영화로 완성해줘.',
+    '위 아이디어를 15~30초 세로형 미니 영화 「' + variant.label + '」 방향으로 완성해줘.',
+    '방향성: ' + variant.desc,
     cinematicReelGrammarPrompt(),
     '이 영상은 대사가 거의 없는 영상이다. 장면 전환, 효과음, 배경음악의 박자, 코믹/액션/서스펜스/드라마틱한 장면 조합으로 이해되게 만든다.',
     '',
-    '기획안 3가지를 만든다.',
-    '1번: 가장 안정적인 추천안. 빠른 전개와 사운드 리듬 균형',
-    '2번: 액션/서스펜스 강화안. 추격, 충격, 반전, 텐션 상승',
-    '3번: 판타지/코믹/드라마 강화안. 놀라운 장면과 감정적 여운',
+    '기획안 1개만 JSON 오브젝트로 만든다.',
     '',
     '각 기획안 필수 필드:',
     '- title',
@@ -14062,6 +14128,7 @@ async function callGeminiStoryPlans(){
     '- audio: 대부분 sfx. 전체 8~10씬 중 vo는 0~1개, 정말 필요해도 최대 2개',
     '- line: vo일 때만 8~16자 수준의 매우 짧은 한 문장. sfx면 빈 문자열',
     '- visual: 누가, 어디서, 무엇을 하는지 한 문장',
+    '- imagePrompt: 이미지 생성기가 바로 그릴 수 있는 완전한 프롬프트 한 줄. 인물(성별/나이/외모/의상), 장소, 시간대/조명, 카메라(샷·앵글·렌즈), 핵심 소품, 프레임 안 배치, 분위기를 모두 포함. 원본 스토리 문장에서 실제 표현을 최소 1개 그대로 인용',
     '- caption: 짧은 자막. 대사 설명 대신 장면의 리듬을 돕는 문구',
     '- emotion',
     '- shot',
@@ -14084,21 +14151,52 @@ async function callGeminiStoryPlans(){
     '- 효과음과 BGM 큐가 영상 동작과 정확히 맞아야 한다',
     '',
     '금지:',
-    '- imagePrompt, negativePrompt 같은 긴 필드는 출력하지 말 것',
+    '- negativePrompt 는 출력하지 말 것 (imagePrompt 는 반드시 포함할 것)',
     '- 설명 대사 남발 금지',
     '- 문자열 안 줄바꿈 금지',
     '- 문자열 안 큰따옴표 금지',
     '- 코드블록 금지',
     '',
     '출력 예시 형태만 참고하고, 실제 내용은 사용자 줄거리에 맞춘다:',
-    '[{"title":"제목","logline":"한 줄 요약","synopsis":"두세 문장 줄거리","tone":"코믹 액션 서스펜스","protagonist":"주인공 설명","centralConflict":"핵심 갈등","twistOrPayoff":"반전 또는 결말","visualContinuity":"얼굴 복장 소품 연속성","storyBible":"공간과 톤 규칙","keyProps":["소품1","소품2"],"scriptTable":[{"scene":1,"group":1,"beat":"오프닝 훅","dramaticFunction":"이상한 단서 제시","audio":"sfx","line":"","visual":"주인공이 비 오는 길에서 이상한 물건을 발견한다","caption":"뭔가 이상하다","emotion":"호기심","shot":"와이드에서 미디엄","angle":"아이레벨","composition":"주인공과 단서를 세로 프레임 중앙에 배치","cameraMotion":"느린 푸시인","continuityNote":"주인공 복장과 단서 유지","soundCue":"작은 반짝음 뒤 낮은 둥","musicCue":"저음 서스펜스 드론 120bpm","editRhythm":"1.2초 푸시인 후 컷","spectacle":"서스펜스 드라마","targetDur":1.2}]}]'
+    '{"title":"제목","logline":"한 줄 요약","synopsis":"두세 문장 줄거리","tone":"코믹 액션 서스펜스","protagonist":"주인공 설명","centralConflict":"핵심 갈등","twistOrPayoff":"반전 또는 결말","visualContinuity":"얼굴 복장 소품 연속성","storyBible":"공간과 톤 규칙","keyProps":["소품1","소품2"],"scriptTable":[{"scene":1,"group":1,"beat":"오프닝 훅","dramaticFunction":"이상한 단서 제시","audio":"sfx","line":"","visual":"주인공이 비 오는 길에서 이상한 물건을 발견한다","imagePrompt":"20대 후반 여자, 검은 트렌치코트, 젖은 아스팔트 골목, 밤 가로등 오렌지 조명, 미디엄 샷 아이레벨 50mm, 발밑 반짝이는 낯선 열쇠, 세로 프레임 중앙, 서스펜스 무드","caption":"뭔가 이상하다","emotion":"호기심","shot":"와이드에서 미디엄","angle":"아이레벨","composition":"주인공과 단서를 세로 프레임 중앙에 배치","cameraMotion":"느린 푸시인","continuityNote":"주인공 복장과 단서 유지","soundCue":"작은 반짝음 뒤 낮은 둥","musicCue":"저음 서스펜스 드론 120bpm","editRhythm":"1.2초 푸시인 후 컷","spectacle":"서스펜스 드라마","targetDur":1.2}]}'
   ].join('\n');
 
-  const text = await callTextAi({ system, userText: prompt, maxTokens: 7500 });
-  const plans = await parseOrRecoverStoryPlans(text, idea);
-  const normalized = normalizeStoryPlansForCinema(plans);
-  if(!Array.isArray(normalized) || !normalized.length) return fallbackStoryPlanSet(idea);
-  return normalized;
+  const text = await callTextAi({ system, userText: prompt, maxTokens: 3800 });
+  let parsed = tryParseStoryPlansJson(text);
+  if(!parsed){
+    try{ parsed = await repairStoryPlansJson(text, idea); }
+    catch(err){ console.warn('스토리 기획안 JSON 복구 실패:', err?.message || err); }
+  }
+  if(!parsed) return null;
+  const arr = Array.isArray(parsed) ? parsed : [parsed];
+  return arr[0] || null;
+}
+
+async function callGeminiStoryPlans(){
+  const idea = compactStoryText(state.storyInput || '');
+  const successes = [];
+  const errors = [];
+  for(let i = 0; i < STORY_PLAN_VARIANTS.length; i++){
+    try{
+      const plan = await callGeminiStoryPlanOne(idea, i);
+      if(plan) successes.push(plan);
+    }catch(err){
+      console.warn('기획안 ' + (i+1) + ' 실패:', err?.message || err);
+      errors.push(err);
+    }
+  }
+  if(!successes.length){
+    if(errors.length === STORY_PLAN_VARIANTS.length && !idea){
+      throw errors[0];
+    }
+    return fallbackStoryPlanSet(idea);
+  }
+  const fallbackSet = fallbackStoryPlanSet(idea);
+  while(successes.length < 3 && fallbackSet.length){
+    successes.push(fallbackSet[successes.length] || fallbackSet[0]);
+  }
+  const normalized = normalizeStoryPlansForCinema(successes);
+  return normalized.length ? normalized : fallbackStoryPlanSet(idea);
 }
 
 
