@@ -5874,28 +5874,45 @@ function renderStudio(){
   return `${petSourceRefsBanner()}${renderManualAssembly()}`;
 }
 
+function petDownloaderUrl(url){
+  // cobalt.tools 는 브라우저에서 YouTube/TikTok/Instagram 등 대부분의 쇼츠를 mp4 로 저장해 주는 오픈 서비스.
+  return `https://cobalt.tools/?u=${encodeURIComponent(url||'')}`;
+}
+
 function petSourceRefsBanner(){
   const refs = state.petSourceRefs || [];
   if(!refs.length) return '';
   return `
     <div class="card" style="margin-bottom:12px; border:1.5px solid #A9C6FA; background:linear-gradient(180deg,#F7FAFF,#FFFFFF);">
       <h3 style="margin-bottom:6px;">🐾 반려동물 트랙 · 담은 영상 ${refs.length}개 (참조)</h3>
-      <div class="settings-note" style="margin-bottom:10px;">
+      <div class="settings-note" style="margin-bottom:10px; line-height:1.55;">
         브라우저는 유튜브·틱톡 영상을 직접 재생하지 못하므로 <b>링크만 참조</b>로 보관돼요.
-        각 링크를 열어 클립을 저장(다운로드)한 뒤, 아래 편집 스튜디오의 <b>소재 업로드</b>로 넣어주세요.
+        각 항목의 <b>💾 다운로드 도우미</b> 버튼으로 <a href="https://cobalt.tools" target="_blank" rel="noopener" style="color:var(--violet);">cobalt.tools</a>를 열어 mp4를 저장한 뒤, 아래 편집 스튜디오의 <b>소재 업로드</b>로 넣어주세요.
+        <br>저작권·이용약관 위반이 없는 범위에서 개인 편집 목적으로만 사용하세요.
       </div>
-      <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:10px;">
-        ${refs.map((r,i)=>`
-          <a href="${escHtml(r.url)}" target="_blank" rel="noopener" style="text-decoration:none; color:inherit; border:1px solid var(--border); border-radius:10px; padding:8px; display:flex; gap:8px; background:#fff;">
-            ${r.thumbnail ? `<img src="${escHtml(r.thumbnail)}" alt="" style="width:60px; height:80px; object-fit:cover; border-radius:6px; flex-shrink:0;">` : ''}
-            <div style="min-width:0; flex:1;">
-              <div style="font-size:12.5px; font-weight:700; line-height:1.35; overflow:hidden; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical;">${i+1}. ${escHtml(r.title||'제목 없음')}</div>
-              <div style="font-size:11px; color:var(--text-lo); margin-top:4px;">${escHtml(r.platform||'')}${r.channel?' · '+escHtml(r.channel):''}${r.viewCount?' · '+Number(r.viewCount).toLocaleString():''}</div>
+      <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:10px;">
+        ${refs.map((r,i)=>{
+          const matched = !!r._matched;
+          return `
+          <div style="border:1px solid ${matched?'#18A063':'var(--border)'}; border-radius:10px; padding:8px; background:${matched?'#F0FDF4':'#fff'}; display:flex; flex-direction:column; gap:6px;">
+            <a href="${escHtml(r.url)}" target="_blank" rel="noopener" style="text-decoration:none; color:inherit; display:flex; gap:8px; min-width:0;">
+              ${r.thumbnail ? `<img src="${escHtml(r.thumbnail)}" alt="" style="width:60px; height:80px; object-fit:cover; border-radius:6px; flex-shrink:0;">` : ''}
+              <div style="min-width:0; flex:1;">
+                <div style="font-size:12.5px; font-weight:700; line-height:1.35; overflow:hidden; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical;">${i+1}. ${escHtml(r.title||'제목 없음')} ${matched?'<span style="color:#15803D; font-size:10px;">✓ 업로드됨</span>':''}</div>
+                <div style="font-size:11px; color:var(--text-lo); margin-top:4px;">${escHtml(r.platform||'')}${r.channel?' · '+escHtml(r.channel):''}${r.viewCount?' · '+Number(r.viewCount).toLocaleString():''}</div>
+              </div>
+            </a>
+            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+              <a href="${escHtml(petDownloaderUrl(r.url))}" target="_blank" rel="noopener" class="btn" style="flex:1; text-align:center; padding:6px 8px; font-size:11.5px; text-decoration:none;">💾 다운로드 도우미</a>
+              <button type="button" class="btn secondary" data-copy-pet-url="${i}" style="flex:1; padding:6px 8px; font-size:11.5px;">📋 URL 복사</button>
             </div>
-          </a>
-        `).join('')}
+          </div>
+        `;}).join('')}
       </div>
-      <button type="button" class="btn secondary" data-clear-pet-refs style="margin-top:10px; font-size:12px;">참조 목록 지우기</button>
+      <div style="display:flex; gap:6px; margin-top:10px; flex-wrap:wrap;">
+        <button type="button" class="btn secondary" data-copy-all-pet-urls style="font-size:12px;">📋 모든 URL 복사 (yt-dlp용)</button>
+        <button type="button" class="btn secondary" data-clear-pet-refs style="font-size:12px;">참조 목록 지우기</button>
+      </div>
     </div>
   `;
 }
@@ -9067,6 +9084,25 @@ document.addEventListener('click', async (e)=>{
     return;
   }
 
+  const copyPetOne = e.target.closest?.('[data-copy-pet-url]');
+  if(copyPetOne){
+    const i = Number(copyPetOne.dataset.copyPetUrl);
+    const url = state.petSourceRefs?.[i]?.url;
+    if(url){
+      try{ await navigator.clipboard.writeText(url); setStatus('final','ok','URL 복사됨'); }
+      catch(_){ window.prompt('복사하세요:', url); }
+    }
+    return;
+  }
+
+  if(e.target.closest?.('[data-copy-all-pet-urls]')){
+    const urls = (state.petSourceRefs||[]).map(r=>r.url).filter(Boolean).join('\n');
+    if(!urls) return;
+    try{ await navigator.clipboard.writeText(urls); setStatus('final','ok',`${(state.petSourceRefs||[]).length}개 URL 복사됨 (터미널에서 yt-dlp -a - 로 붙여넣기 가능)`); }
+    catch(_){ window.prompt('복사하세요 (yt-dlp -a - < 여기붙여넣기):', urls); }
+    return;
+  }
+
   if(e.target.id === 'petSendToStudioBtn'){
     const picks = state.selectedSourceVideos || [];
     if(!picks.length){
@@ -11402,9 +11438,35 @@ document.addEventListener('change', (e)=>{
       alert(`최대 ${MAX_SOURCE_VIDEOS}개까지만 가능해서 앞쪽 ${remaining}개만 추가했어요.`);
     }
     const before = state.sourceVideos.length;
+    const refs = state.petSourceRefs || [];
+    const usedRefIdx = new Set(refs.map((r,i)=> r._matched ? i : -1).filter(i=>i>=0));
+    const pickRefForFile = (file)=>{
+      // 1) 파일 이름에 참조 제목 토큰이 하나라도 들어있으면 그 참조 선택
+      const nm = String(file.name||'').toLowerCase();
+      for(let i=0; i<refs.length; i++){
+        if(usedRefIdx.has(i)) continue;
+        const title = String(refs[i].title||'').toLowerCase();
+        const tokens = title.split(/\s+/).filter(t=>t.length>=3);
+        if(tokens.some(t => nm.includes(t))){ usedRefIdx.add(i); return refs[i]; }
+      }
+      // 2) 순서 매칭 — 매칭 안 된 첫 참조
+      for(let i=0; i<refs.length; i++){
+        if(!usedRefIdx.has(i)){ usedRefIdx.add(i); return refs[i]; }
+      }
+      return null;
+    };
     files.slice(0, remaining).forEach(file=>{
       const isImage = file.type.startsWith('image/');
-      state.sourceVideos.push({ file, name: file.name, url: URL.createObjectURL(file), isImage });
+      const ref = !isImage ? pickRefForFile(file) : null;
+      const entry = { file, name: ref?.title ? ref.title.slice(0,80) : file.name, url: URL.createObjectURL(file), isImage };
+      if(ref){
+        entry.refUrl = ref.url;
+        entry.refThumbnail = ref.thumbnail;
+        entry.refPlatform = ref.platform;
+        entry.refChannel = ref.channel;
+        ref._matched = true;
+      }
+      state.sourceVideos.push(entry);
     });
     // 미디어함에만 추가 — 미리보기는 타임라인에 올린 뒤 표시
     if(state.activeSourceIndex == null && state.sourceVideos.length > before){
