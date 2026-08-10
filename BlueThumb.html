@@ -3275,6 +3275,8 @@ label.overseas-micro-radio-label input{flex-shrink:0;margin:0;width:15px;height:
   pointer-events:none;
   box-sizing:border-box;
   overflow:hidden;
+  container-type:inline-size;
+  container-name:ytbanner-drop;
 }
 .ytbanner-safe-overlay{position:absolute;inset:0;pointer-events:none;z-index:1}
 .ytbanner-safe-band--tv{
@@ -3339,6 +3341,8 @@ label.overseas-micro-radio-label input{flex-shrink:0;margin:0;width:15px;height:
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   padding:0 1.5%;box-sizing:border-box;z-index:2;
   transform:translateY(var(--yt-mark-pos-y,0%));
+  container-type:inline-size;
+  container-name:ytbanner-safe;
 }
 /* 유튜브 배너 편집칸: 문구 DOM은 편집용 단일 소스, 드롭존 안내만 숨김 */
 #baseThumbDrop.ytbanner-drop--live #baseThumbDropContent{display:none!important}
@@ -3356,6 +3360,8 @@ label.overseas-micro-radio-label input{flex-shrink:0;margin:0;width:15px;height:
   display:flex!important;flex-direction:column;align-items:center;justify-content:center;
   padding:0 1.5%;box-sizing:border-box;z-index:2;
   transform:translateY(var(--yt-mark-pos-y,0%));
+  container-type:inline-size;
+  container-name:ytbanner-safe;
 }
 .ytbanner-mark-inner{
   position:relative;display:flex;align-items:center;justify-content:center;
@@ -3386,15 +3392,16 @@ label.overseas-micro-radio-label input{flex-shrink:0;margin:0;width:15px;height:
   touch-action:none;
   user-select:none;
   -webkit-user-select:none;
-  font-size:calc(var(--yt-size-main,1) * clamp(16px,5.2vw,52px));
+  /* 안전영역(오렌지 박스) 폭 기준 컨테이너 스케일 — JS 자동 fit이 fitScale로 미세 조정 */
+  font-size:calc(var(--yt-size-main,1) * var(--yt-fit-main,1) * clamp(20px,14cqi,180px));
 }
 .ytbanner-drop-line:active{cursor:grabbing}
 .ytbanner-drop-line--mid{
-  font-size:calc(var(--yt-size-mid,.78) * clamp(12px,3.8vw,38px));
+  font-size:calc(var(--yt-size-mid,.82) * var(--yt-fit-mid,1) * clamp(16px,10cqi,130px));
   margin-top:0;line-height:var(--yt-line-height,1.05);
 }
 .ytbanner-drop-line--short{
-  font-size:calc(var(--yt-size-short,.62) * clamp(10px,2.8vw,28px));
+  font-size:calc(var(--yt-size-short,.66) * var(--yt-fit-short,1) * clamp(12px,7.5cqi,96px));
   margin-bottom:0;line-height:var(--yt-line-height,1.05);opacity:.95;
 }
 #baseThumbDrop.ytbanner-drop--frame #baseThumbDropContent{
@@ -10696,10 +10703,10 @@ body.bt-screen3-top #screen3 > .screen-hdr.screen-hdr--studio{
                   </div>
                   <div class="ytbanner-mark-ctrl-row ytbanner-mark-ctrl-row--colors">
                     <label>문구 색상</label>
-                    <input type="color" id="ytBannerLineColor1" value="#ffffff" title="선택 줄 색상 A" oninput="onYtBannerMarkStyleCtrlInput()" onchange="onYtBannerMarkStyleCtrlCommit()">
-                    <input type="color" id="ytBannerLineColor2" value="#ffe600" title="선택 줄 색상 B" oninput="onYtBannerMarkStyleCtrlInput()" onchange="onYtBannerMarkStyleCtrlCommit()">
-                    <input type="color" id="ytBannerLineColor3" value="#22d3ee" title="선택 줄 색상 C" oninput="onYtBannerMarkStyleCtrlInput()" onchange="onYtBannerMarkStyleCtrlCommit()">
-                    <input type="color" id="ytBannerLineColor4" value="#ff4d6d" title="선택 줄 색상 D" oninput="onYtBannerMarkStyleCtrlInput()" onchange="onYtBannerMarkStyleCtrlCommit()">
+                    <input type="color" id="ytBannerLineColor1" value="#ffffff" title="선택 줄 색상 A" oninput="markYtBannerUserManualPalette();onYtBannerMarkStyleCtrlInput()" onchange="markYtBannerUserManualPalette();onYtBannerMarkStyleCtrlCommit()">
+                    <input type="color" id="ytBannerLineColor2" value="#ffe600" title="선택 줄 색상 B" oninput="markYtBannerUserManualPalette();onYtBannerMarkStyleCtrlInput()" onchange="markYtBannerUserManualPalette();onYtBannerMarkStyleCtrlCommit()">
+                    <input type="color" id="ytBannerLineColor3" value="#22d3ee" title="선택 줄 색상 C" oninput="markYtBannerUserManualPalette();onYtBannerMarkStyleCtrlInput()" onchange="markYtBannerUserManualPalette();onYtBannerMarkStyleCtrlCommit()">
+                    <input type="color" id="ytBannerLineColor4" value="#ff4d6d" title="선택 줄 색상 D" oninput="markYtBannerUserManualPalette();onYtBannerMarkStyleCtrlInput()" onchange="markYtBannerUserManualPalette();onYtBannerMarkStyleCtrlCommit()">
                     <input type="color" id="ytBannerAllLineColor" value="#ffffff" title="1·2·3번줄 전체 단색">
                     <button type="button" class="ytbanner-mark-ctrl-btn" onclick="applyYtBannerAiRecommendedPalette()" title="문구와 선택 템플릿에 맞춰 10색 팔레트 중 2~4색을 자동 배치">AI 색상</button>
                     <button type="button" class="ytbanner-mark-ctrl-btn" onclick="applyYtBannerAllLinesColor()" title="1·2·3번줄 색상 A/B/C/D를 모두 같은 색으로 적용">전체 적용</button>
@@ -32025,22 +32032,51 @@ function syncYtBannerResultDomPreview(){
 }
 var _ytBannerFitLinesRaf = 0;
 function scheduleFitYtBannerDropLinesNoWrap(){
-  /* 글자 크기는 전용 슬라이더만 제어한다. 마크/폰트 선택 시 자동 축소가 끼어들면 크기가 흔들려 보인다. */
-  return;
-}
-function fitYtBannerDropLinesNoWrap(){
-  return;
-  ['ytBannerDropShort','ytBannerDropMain','ytBannerDropMid'].forEach(function(id){
-    var el = g(id);
-    if(!el || el.style.display === 'none') return;
-    el.style.whiteSpace = 'nowrap';
-    var maxW = Math.max(1, el.clientWidth || (el.parentElement && el.parentElement.clientWidth) || 1);
-    var needW = Math.max(1, el.scrollWidth || 1);
-    if(needW <= maxW) return;
-    var fs = parseFloat(getComputedStyle(el).fontSize) || 16;
-    var ratio = Math.max(0.34, Math.min(1, (maxW - 2) / needW));
-    el.style.fontSize = Math.max(8, Math.floor(fs * ratio * 10) / 10) + 'px';
+  if(_ytBannerFitLinesRaf) return;
+  _ytBannerFitLinesRaf = requestAnimationFrame(function(){
+    _ytBannerFitLinesRaf = 0;
+    try{ fitYtBannerDropLinesNoWrap(); }catch(_eFit2){}
   });
+}
+/** 안전영역 폭·높이에 문구가 꽉 차도록 자동 스케일.
+    - 사용자 슬라이더값(--yt-size-*)이 정한 라인간 크기 위계는 유지한다(모든 라인에 동일 배수 적용).
+    - 가장 넓은 라인이 안전영역 폭의 92%가 되도록, 그리고 총 세로합이 안전영역 높이의 88%를 넘지 않도록 축소/확대. */
+function fitYtBannerDropLinesNoWrap(){
+  var plate = g('ytBannerMarkPlate');
+  var stack = document.querySelector('#ytBannerDropTextPreview .ytbanner-safe-text-stack');
+  if(!stack || !plate) return;
+  var boxW = stack.clientWidth || 0;
+  var boxH = stack.clientHeight || 0;
+  if(boxW < 8 || boxH < 8) return;
+
+  // 1. 배수 초기화(자연 스케일 측정)
+  ['--yt-fit-main','--yt-fit-mid','--yt-fit-short'].forEach(function(v){ plate.style.setProperty(v, '1'); });
+
+  var lines = [
+    { id:'ytBannerDropMain' },
+    { id:'ytBannerDropMid' },
+    { id:'ytBannerDropShort' }
+  ].map(function(r){
+    var el = g(r.id);
+    if(!el || el.style.display === 'none' || !el.textContent.trim()) return null;
+    return { el:el, w: el.scrollWidth || 0, h: el.offsetHeight || 0 };
+  }).filter(Boolean);
+
+  if(!lines.length) return;
+  var maxW = 0, sumH = 0;
+  lines.forEach(function(l){ if(l.w > maxW) maxW = l.w; sumH += l.h; });
+  if(maxW < 4) return;
+
+  var widthFit = (boxW * 0.92) / maxW;
+  var heightFit = sumH > 0 ? (boxH * 0.88) / sumH : widthFit;
+  var mul = Math.min(widthFit, heightFit);
+  if(!isFinite(mul) || mul <= 0) mul = 1;
+  mul = Math.max(0.35, Math.min(3.0, mul));
+
+  var s = mul.toFixed(3);
+  plate.style.setProperty('--yt-fit-main', s);
+  plate.style.setProperty('--yt-fit-mid', s);
+  plate.style.setProperty('--yt-fit-short', s);
 }
 function ytBannerLinesFromState(){
   var t = S.confirmedTitle || {};
@@ -32066,6 +32102,107 @@ function markYtBannerUserTyping(){
     _ytBannerUserTyping = false;
     try{ flushYtBannerTitleEditing(); }catch(_eIdle){}
   }, typeof YT_BANNER_TYPING_IDLE_MS === 'number' ? YT_BANNER_TYPING_IDLE_MS : 900);
+  try{ scheduleYtBannerAiStylePreview(); }catch(_eAiStyle){}
+}
+
+/** 문구·채널설명이 확정되면 Gemini에게 3색 팔레트 + 테두리 색을 요청해 미리보기 DOM에만 반영.
+    - 배경 이미지 생성은 하지 않음(비용·지연 방지).
+    - 사용자가 색상 A/B/C/D를 직접 만졌다면 존중(플래그로 회피). */
+var _ytBannerAiStyleTimer = 0;
+var _ytBannerAiStyleReqSeq = 0;
+var _ytBannerAiStyleLastKey = '';
+function ytBannerAiStyleInputKey(){
+  var lines = ytBannerLinesFromUi();
+  var ctx = String(S.thumbTitleContext || '').trim().slice(0, 400);
+  return (lines.main || '') + '' + (lines.mid || '') + '' + (lines.short || '') + '' + ctx;
+}
+function scheduleYtBannerAiStylePreview(){
+  if(_ytBannerAiStyleTimer) clearTimeout(_ytBannerAiStyleTimer);
+  _ytBannerAiStyleTimer = setTimeout(function(){
+    _ytBannerAiStyleTimer = 0;
+    try{ runYtBannerAiStylePreview(); }catch(_eRunAi){}
+  }, 1800);
+}
+try{ window.scheduleYtBannerAiStylePreview = scheduleYtBannerAiStylePreview; }catch(_eWsy){}
+function ytBannerUserPaletteWasManuallyEdited(){
+  try{ return !!(S && S._ytBannerUserManualPalette); }catch(_ePm){ return false; }
+}
+function markYtBannerUserManualPalette(){
+  try{ S._ytBannerUserManualPalette = true; }catch(_eMp){}
+}
+function clearYtBannerUserManualPalette(){
+  try{ S._ytBannerUserManualPalette = false; }catch(_eCp){}
+}
+try{ window.markYtBannerUserManualPalette = markYtBannerUserManualPalette; }catch(_eWmp){}
+try{ window.clearYtBannerUserManualPalette = clearYtBannerUserManualPalette; }catch(_eWcp){}
+async function runYtBannerAiStylePreview(){
+  if(typeof isYoutubeBannerStudioMode !== 'function' || !isYoutubeBannerStudioMode()) return;
+  if(ytBannerUserPaletteWasManuallyEdited()) return;
+  var lines = ytBannerLinesFromUi();
+  if(!lines.main && !lines.mid && !lines.short) return;
+  var ctx = String(S.thumbTitleContext || '').trim();
+  var gmKey = g('gmKey') && String(g('gmKey').value || '').trim();
+  if(!gmKey) return; // Gemini 키 없으면 조용히 스킵
+  var key = ytBannerAiStyleInputKey();
+  if(key === _ytBannerAiStyleLastKey) return;
+  _ytBannerAiStyleLastKey = key;
+  var seq = ++_ytBannerAiStyleReqSeq;
+  var promptText =
+    'Return STRICT JSON only: {"colors":["#RRGGBB","#RRGGBB","#RRGGBB","#RRGGBB"],"stroke":"#RRGGBB","font_hint":"..."}\n'+
+    'Design 4 vivid hex fills + 1 stroke hex for a YouTube channel banner headline.\n'+
+    'The palette must match the emotional tone/topic/mood of the Korean lines below and the channel description.\n'+
+    'Contrast: fills must be readable over a photo background using a dark or white stroke.\n'+
+    'font_hint: one of "impact" | "elegant" | "playful" | "serious" | "classic" | "modern".\n'+
+    'Korean lines:\n'+
+    (lines.main ? '  L1: '+lines.main+'\n' : '')+
+    (lines.mid ? '  L2: '+lines.mid+'\n' : '')+
+    (lines.short ? '  L3: '+lines.short+'\n' : '')+
+    'Channel description (may be empty):\n  '+(ctx.slice(0, 600));
+  try{
+    var resp = await geminiGenerateJson(gmKey, {
+      contents: [{ role:'user', parts:[{ text: promptText }] }],
+      generationConfig: { temperature: 0.6, responseMimeType: 'application/json' }
+    });
+    if(seq !== _ytBannerAiStyleReqSeq) return; // 새 요청이 이미 예약됨
+    var raw = '';
+    try{
+      raw = String(((resp && resp.candidates && resp.candidates[0] && resp.candidates[0].content && resp.candidates[0].content.parts && resp.candidates[0].content.parts[0] && resp.candidates[0].content.parts[0].text) || '')).trim();
+    }catch(_eRx){ raw = ''; }
+    if(!raw) return;
+    var jm = raw.match(/\{[\s\S]*\}/);
+    var parsed = null;
+    try{ parsed = JSON.parse(jm ? jm[0] : raw); }catch(_eJp){ parsed = null; }
+    if(!parsed || !Array.isArray(parsed.colors) || parsed.colors.length < 3) return;
+    applyYtBannerAiStylePreviewPayload(parsed);
+  }catch(e){
+    console.warn('runYtBannerAiStylePreview', e && e.message || e);
+  }
+}
+function isValidHex6(s){ return typeof s === 'string' && /^#[0-9a-fA-F]{6}$/.test(s.trim()); }
+function applyYtBannerAiStylePreviewPayload(payload){
+  var cols = (payload.colors || []).filter(isValidHex6).slice(0, 4);
+  if(cols.length < 3) return;
+  while(cols.length < 4) cols.push(cols[cols.length - 1]);
+  var stroke = isValidHex6(payload.stroke) ? payload.stroke : '#000000';
+  var map = {
+    main:  [cols[0], cols[1], cols[2], cols[3]],
+    mid:   [cols[1], cols[0], cols[3], cols[2]],
+    short: [cols[2], cols[3], cols[0], cols[1]]
+  };
+  ['main','mid','short'].forEach(function(f){
+    if(!S.ted || !S.ted[f]) return;
+    try{
+      setTedColor(f,'c1',map[f][0]);
+      setTedColor(f,'c2',map[f][1]);
+      setTedColor(f,'c3',map[f][2]);
+      setTedColor(f,'c4',map[f][3]);
+      setTedColor(f,'stroke',stroke);
+    }catch(_eSc){}
+  });
+  try{ S._ytBannerAiStyleFontHint = String(payload.font_hint || '').trim().toLowerCase(); }catch(_eFh){}
+  try{ syncYtBannerDropTextDom(ytBannerLinesFromUi()); }catch(_eDom){}
+  try{ syncYtBannerMarkStyleControls(); }catch(_eCtl){}
+  try{ scheduleFitYtBannerDropLinesNoWrap(); }catch(_eFit){}
 }
 function scheduleYtBannerDropTextPreviewLite(){
   if(_ytBannerLitePreviewRaf) return;
@@ -35917,7 +36054,8 @@ async function _stabilitySd3Img2Img(pack, imageDataUrl, bearerKey, apiOrigin, st
   return arrayBufferToPngDataUrl(buf);
 }
 
-/** fal 응답의 detail / error / message 가 객체일 때 [object Object] 방지 */
+/** fal 응답의 detail / error / message 가 객체일 때 [object Object] 방지
+    Pydantic 스타일 검증 오류 {type, loc, msg, input}도 사람이 읽을 수 있게 풀어낸다. */
 function stringifyFalErrorPart(val, maxLen){
   maxLen = maxLen || 560;
   if(val == null) return '';
@@ -35929,14 +36067,46 @@ function stringifyFalErrorPart(val, maxLen){
       var s = stringifyFalErrorPart(val[i], maxLen);
       if(s) acc.push(s);
     }
-    return acc.join(' ').trim();
+    return acc.join('; ').trim();
   }
   if(typeof val === 'object'){
+    // Pydantic {type, loc:[...], msg, input}
+    if(typeof val.msg === 'string' && val.msg.trim()){
+      var locStr = '';
+      if(Array.isArray(val.loc) && val.loc.length){
+        try{ locStr = val.loc.filter(function(x){ return x != null && x !== 'body'; }).join('.'); }catch(_eLoc){}
+      }
+      var t = typeof val.type === 'string' ? val.type : '';
+      var head = locStr ? (locStr + ': ') : '';
+      var tail = t ? (' ('+t+')') : '';
+      return (head + val.msg.trim() + tail).slice(0, maxLen);
+    }
     if(typeof val.message === 'string' && val.message.trim()) return val.message.trim();
-    if(typeof val.msg === 'string' && val.msg.trim()) return val.msg.trim();
     try{ return JSON.stringify(val).slice(0, maxLen); }catch(_){ return ''; }
   }
   return String(val);
+}
+
+/** 422 원인 힌트 — 프롬프트 길이 · aspect_ratio · resolution 등 자주 걸리는 필드에 한줄 안내를 붙인다. */
+function buildFal422HintForBody(joined, o){
+  var s = String(joined || '').toLowerCase();
+  var hints = [];
+  if(s.indexOf('aspect_ratio') >= 0 || s.indexOf('aspect ratio') >= 0){
+    hints.push('허용 aspect_ratio: 21:9 / 16:9 / 4:3 / 3:2 / 1:1 / 2:3 / 3:4 / 9:16 / 9:21');
+  }
+  if(s.indexOf('resolution') >= 0){
+    hints.push('허용 resolution: 1K / 2K / 4K');
+  }
+  if(s.indexOf('prompt') >= 0 && (s.indexOf('too long') >= 0 || s.indexOf('exceed') >= 0 || s.indexOf('max_length') >= 0 || s.indexOf('length') >= 0)){
+    hints.push('프롬프트 길이 초과 — 부가 설명·부록을 줄이거나 다른 모델(nano-banana-2)로 시도해 보세요.');
+  }
+  if(s.indexOf('image_url') >= 0 || s.indexOf('image url') >= 0){
+    hints.push('첨부 이미지 URL/데이터 형식 이상 — 이미지 첨부를 다시 시도해 보세요.');
+  }
+  if(s.indexOf('safety') >= 0 || s.indexOf('policy') >= 0 || s.indexOf('nsfw') >= 0){
+    hints.push('안전 필터 차단 — 문구·이미지 표현을 완화하거나 다른 스타일로 재시도.');
+  }
+  return hints.length ? ('\n힌트: ' + hints.join(' / ')) : '';
 }
 
 function buildFalHttpErrorMessage(status, bodyObj){
@@ -35946,7 +36116,11 @@ function buildFalHttpErrorMessage(status, bodyObj){
   if(!joined){
     try{ joined = JSON.stringify(o).slice(0, 480); }catch(_){ joined = '응답 본문 없음'; }
   }
-  return 'fal/nano-banana HTTP '+status+': '+joined;
+  var msg = 'fal/nano-banana HTTP '+status+': '+joined;
+  if(status === 422){
+    try{ msg += buildFal422HintForBody(joined, o); }catch(_eHint){}
+  }
+  return msg;
 }
 
 /** fal-ai/nano-banana-* T2I: 프롬프트가 비정상적으로 길면 **422 Unprocessable Entity**가 자주 발생(게이트웨이 검증·모델 입력 상한). LOCK/부록은 보통 끝쪽에 있으므로 앞·뒤를 보존하고 중간만 절단. */
@@ -38141,7 +38315,7 @@ function buildPromptStudioInputBoxHtml(ctxText){
     + '<label class="ctb-context-lbl ctb-context-head-label" for="thumbTitleContext" style="margin:0">썸네일 제목 부가 설명 <span style="opacity:.82;font-weight:600">(구도·분위기·소품 보강)</span></label>'
     + '<div class="ctb-context-action-row"><button type="button" class="btn-confirm ctb-sync-action-btn" onclick="fillThumbTitleContextExample()" title="부가 설명에 참고 내용을 넣습니다">부가 설명 넣기</button></div>'
     + '<p class="trailer-slot-hint ctb-context-hint-row" style="margin:0;font-size:10px;line-height:1.5">부가 설명은 화면에 직접 글자로 넣지 않고, 이미지의 장면·분위기·소품을 보강하는 참고 정보로만 사용합니다.</p>'
-    + '<textarea class="ctb-context" id="thumbTitleContext" rows="10" maxlength="' + THUMB_CONTEXT_MAX_CHARS + '" oninput="syncThumbTitleContextFromInputCore();updateThumbContextCharMeta();" placeholder="장면, 톤, 색감, 피해야 할 요소 등을 적어 주세요.">' + escH(ctxText || '') + '</textarea>'
+    + '<textarea class="ctb-context" id="thumbTitleContext" rows="10" maxlength="' + THUMB_CONTEXT_MAX_CHARS + '" oninput="syncThumbTitleContextFromInputCore();updateThumbContextCharMeta();try{scheduleYtBannerAiStylePreview();}catch(_eCtxAi){}" placeholder="장면, 톤, 색감, 피해야 할 요소 등을 적어 주세요.">' + escH(ctxText || '') + '</textarea>'
     + '<span class="ctb-context-meta" id="thumbContextCharMeta" style="display:block;font-size:10px;color:var(--muted2);margin-top:4px;font-family:var(--mono)">0자 / 최대 ' + THUMB_CONTEXT_MAX_CHARS.toLocaleString('ko-KR') + '자 · 칸 크기 고정·스크롤</span>'
     + '</div>'
     + '<div id="overseasMicroPanelWrap" style="display:none!important" aria-hidden="true"></div>'
@@ -38174,7 +38348,7 @@ function buildConfirmedTitleBoxBodyHtml(t, ctxText, omSnap){
           <label class="ctb-context-lbl" for="thumbTitleContext" style="margin:0" title="15자 이상이면 확정문구 없이도 자동 추출·생성 가능">📄 썸네일 제목 부가 설명 <span style="opacity:.82;font-weight:600">(<b>15자 이상</b>이면 확정문구 없이 생성 가능)</span></label>
           <button type="button" class="btn-confirm" style="padding:4px 10px;font-size:11px;margin:0" onclick="fillThumbTitleContextExample()" title="부가 설명란에 참고 내용을 넣습니다">✏️ 부가설명 입력</button>
         </div>
-        <textarea class="ctb-context" id="thumbTitleContext" rows="10" maxlength="${THUMB_CONTEXT_MAX_CHARS}" oninput="syncThumbTitleContextFromInputCore();updateThumbContextCharMeta();" placeholder="대본·기획안·원문·메모를 붙여넣으세요. 15자 이상이면 확정문구(위 3줄) 없이도 썸네일 생성이 가능합니다.">${escH(ctxText||'')}</textarea>
+        <textarea class="ctb-context" id="thumbTitleContext" rows="10" maxlength="${THUMB_CONTEXT_MAX_CHARS}" oninput="syncThumbTitleContextFromInputCore();updateThumbContextCharMeta();try{scheduleYtBannerAiStylePreview();}catch(_eCtxAi){}" placeholder="대본·기획안·원문·메모를 붙여넣으세요. 15자 이상이면 확정문구(위 3줄) 없이도 썸네일 생성이 가능합니다.">${escH(ctxText||'')}</textarea>
         <span class="ctb-context-meta" id="thumbContextCharMeta" style="display:block;font-size:10px;color:var(--muted2);margin-top:4px;font-family:var(--mono)">0자 / 최대 ${THUMB_CONTEXT_MAX_CHARS.toLocaleString('ko-KR')}자 · 칸 크기 고정·스크롤</span>
       </div>
       <div id="overseasMicroPanelWrap" style="display:none!important" aria-hidden="true"></div>
@@ -38196,7 +38370,7 @@ function buildConfirmedTitleBoxBodyHtml(t, ctxText, omSnap){
           <button type="button" class="btn-confirm ctb-sync-action-btn" onclick="fillThumbTitleContextExample()" title="썸네일 제목 부가 설명란에 참고 내용을 넣습니다">📋 부가 설명 넣기</button>
         </div>
         <p class="trailer-slot-hint ctb-context-hint-row" style="margin:0;font-size:10px;line-height:1.5">대본·원문·메모를 길게 붙여넣으세요. <b>15자 이상</b>이면 위 확정 3줄 없이도 컨셉·썸네일 생성이 가능합니다.</p>
-        <textarea class="ctb-context" id="thumbTitleContext" rows="10" maxlength="${THUMB_CONTEXT_MAX_CHARS}" oninput="syncThumbTitleContextFromInputCore();updateThumbContextCharMeta();" placeholder="대본·기획안·원문·메모를 붙여넣으세요. 15자 이상이면 확정문구(위 3줄) 없이도 썸네일 생성이 가능합니다.">${escH(ctxText||'')}</textarea>
+        <textarea class="ctb-context" id="thumbTitleContext" rows="10" maxlength="${THUMB_CONTEXT_MAX_CHARS}" oninput="syncThumbTitleContextFromInputCore();updateThumbContextCharMeta();try{scheduleYtBannerAiStylePreview();}catch(_eCtxAi){}" placeholder="대본·기획안·원문·메모를 붙여넣으세요. 15자 이상이면 확정문구(위 3줄) 없이도 썸네일 생성이 가능합니다.">${escH(ctxText||'')}</textarea>
         <span class="ctb-context-meta" id="thumbContextCharMeta" style="display:block;font-size:10px;color:var(--muted2);margin-top:4px;font-family:var(--mono)">0자 / 최대 ${THUMB_CONTEXT_MAX_CHARS.toLocaleString('ko-KR')}자 · 칸 크기 고정·스크롤</span>
       </div>
       <div id="overseasMicroPanelWrap" class="overseas-micro-panel-wrap ctb-micro-rail">
@@ -50863,6 +51037,7 @@ window.addEventListener('resize',function(){
   clearTimeout(_thumbResizeTimer);
   _thumbResizeTimer=setTimeout(function(){
     if(S.screen===3&&S.confirmedTitle) refreshThumbTextLayers();
+    try{ scheduleFitYtBannerDropLinesNoWrap(); }catch(_eFitRz){}
   },160);
 });
 
