@@ -1784,7 +1784,7 @@ let state = {
     higgsfieldKeyId:'', higgsfieldKeySecret:'',
     higgsfieldBase:'https://platform.higgsfield.ai',
     // 공식 Platform API 슬러그. soul/v2/* 는 웹앱 전용이라 API 키로는 403이 납니다.
-    hfCharacterModel:'higgsfield-ai/soul/standard', hfImageModel:'higgsfield-ai/popcorn/auto', hfVideoModel:'higgsfield-ai/dop/lite', hfAudioModel:'higgsfield-ai/text2speech/v2',
+    hfCharacterModel:'higgsfield-ai/soul/standard', hfImageModel:'higgsfield-ai/popcorn/auto', hfVideoModel:'higgsfield-ai/dop/lite', hfT2vModel:'higgsfield-ai/dop/text-to-video', hfAudioModel:'higgsfield-ai/text2speech/v2',
     hfAudioVariant:'elevenlabs', hfAudioVoiceId:'',
     typecastApiKey:'', typecastVoices:[
       { label:'이겸 (남)', id:'tc_67bfd35fda120cfcc76b9cb9' },
@@ -1866,6 +1866,8 @@ let state = {
   charGender: 'auto',
   heroType: 'human',          // 'human' | 'animal' — 주인공 유형 (동물이면 반려동물·야생 등)
   heroAnimalSpecies: '',      // 동물 주인공일 때 종/견종/특징
+  t2vMode: false,             // 이미지 스킵 · 텍스트→영상 직접 생성 모드
+  maxTotalDuration: 15,       // 완성 영상 총 길이 상한(초). T2V/i2v 모두 참고.
   castCount: 2,               // 주목 등장인물 수 (주인공 포함, 군중 제외 · 기본 2)
   drawHero: true,             // 주인공 이미지 생성 여부
   heroSource: 'ai',           // 주인공: ai | upload
@@ -3306,8 +3308,13 @@ function renderSettings(){
         <div class="settings-note" style="margin-top:6px;">권장: <code>higgsfield-ai/popcorn/auto</code> (장면·소품) · resolution 720p/1600p</div>
       </div>
       <div class="field">
-        <label>이미지→영상 모델</label>
-        <input type="text" id="in-model-video" value="${state.keys.hfVideoModel}" placeholder="예: .../image-to-video">
+        <label>이미지→영상 모델 (image-to-video)</label>
+        <input type="text" id="in-model-video" value="${state.keys.hfVideoModel}" placeholder="예: higgsfield-ai/dop/lite">
+      </div>
+      <div class="field">
+        <label>텍스트→영상 모델 (text-to-video · 이미지 스킵)</label>
+        <input type="text" id="in-model-t2v" value="${escHtml(state.keys.hfT2vModel||'')}" placeholder="예: higgsfield-ai/dop/text-to-video">
+        <div class="settings-note" style="margin-top:6px;">이미지 생성을 건너뛰고 바로 클립을 생성할 때 사용합니다. Higgsfield 대시보드에서 지원하는 T2V 슬러그를 확인해 넣으세요.</div>
       </div>
       <div style="background:#F0F7FF; border:1px solid #B7D3F5; border-radius:10px; padding:12px; margin-bottom:12px;">
         <div style="font-weight:800; margin-bottom:6px;">힉스필드 음성 연결 순서</div>
@@ -8012,6 +8019,13 @@ function collectProductionOptionsFromUI(){
     if(!state.includeNarration) state.keys.narrationMode = 'off';
     else if(state.keys.narrationMode === 'off') state.keys.narrationMode = 'auto';
   }
+  const t2vEl = document.getElementById('prodT2vMode');
+  if(t2vEl) state.t2vMode = !!t2vEl.checked;
+  const maxDurEl = document.getElementById('prodMaxTotalDuration');
+  if(maxDurEl){
+    const n = Number(maxDurEl.value);
+    state.maxTotalDuration = Number.isFinite(n) && n > 0 ? Math.max(3, Math.min(120, n)) : 15;
+  }
   // 씬별 대사/효과음 토글
   document.querySelectorAll('[data-audio-mode]').forEach(el=>{
     const i = Number(el.dataset.audioMode);
@@ -8128,6 +8142,21 @@ function renderProductionSetupCard(){
         <select id="prodAspectRatio">
           ${Object.keys(ASPECT_RATIOS).map(k=>`<option value="${k}" ${state.aspectRatio===k?'selected':''}>${k}</option>`).join('')}
         </select>
+      </div>
+
+      <div class="field" style="margin-top:4px; padding:12px; border:1.5px dashed #F5C77E; border-radius:10px; background:#FFF8EC;">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:800;">
+          <input type="checkbox" id="prodT2vMode" ${state.t2vMode?'checked':''}>
+          ⚡ 이미지 스킵 · 텍스트→영상 직접 생성 (T2V)
+        </label>
+        <div class="settings-note" style="margin-top:6px; font-size:12.5px; line-height:1.55;">
+          씬 이미지 생성 단계를 건너뛰고 대본 씬 프롬프트에서 <b>바로 영상 클립</b>을 만들어요. 크레딧·시간이 줄지만 씬 간 개체 일관성은 이미지→영상 모드보다 약할 수 있습니다.
+        </div>
+        <div class="field" style="margin:8px 0 0;">
+          <label style="font-size:12.5px;">완성 영상 총 길이 상한 (초)</label>
+          <input type="number" id="prodMaxTotalDuration" min="5" max="60" step="1" value="${Number(state.maxTotalDuration)||15}" style="width:120px;">
+          <div class="settings-note" style="margin-top:4px; font-size:11.5px;">씬 수에 맞춰 씬당 길이가 자동 분배됩니다 (예: 15초 ÷ 5씬 = 3초/씬).</div>
+        </div>
       </div>
 
       <div class="field" style="margin-top:4px; padding:12px; border:1px solid #C7D7F5; border-radius:10px; background:#F7FAFF;">
@@ -8273,8 +8302,13 @@ async function runAutoVideoPipeline(){
   collectProductionOptionsFromUI();
   migrateAllHfModelSlugs();
   if(!state.scriptTable?.length) throw new Error('대본이 없어요. 먼저 기획안/대본 버전을 선택하세요.');
-  if(!state.keys.hfCharacterModel || !state.keys.hfImageModel || !state.keys.hfVideoModel){
-    throw new Error('Higgsfield 모델 슬러그가 비어 있어요. API 설정에서 확인해 주세요.');
+  const isT2v = !!state.t2vMode;
+  if(isT2v){
+    if(!state.keys.hfT2vModel) throw new Error('T2V 모델 슬러그가 비어 있어요. API 설정에서 텍스트→영상 모델을 입력해 주세요.');
+  }else{
+    if(!state.keys.hfCharacterModel || !state.keys.hfImageModel || !state.keys.hfVideoModel){
+      throw new Error('Higgsfield 모델 슬러그가 비어 있어요. API 설정에서 확인해 주세요.');
+    }
   }
   if(!String(state.keys.higgsfieldKeyId||'').trim() || !String(state.keys.higgsfieldKeySecret||'').trim()){
     throw new Error('Higgsfield Key ID·Secret이 비어 있어요. API 설정에서 입력해주세요.');
@@ -8316,67 +8350,91 @@ async function runAutoVideoPipeline(){
   applyShotPlanToScript();
 
   const isStoryAuto = state.scriptMode === 'story' && state.selectedStoryPlan != null;
-  if(isStoryAuto){
-    setStatus('auto-gen','loading','② 이야기에서 주인공·조연·소품 분석 후 캐릭터 생성 중...');
-    await runAutoAnalyzeAndDrawAllCast();
+  const groupCount = state.visualGroups.length;
+  const maxTotal = Math.max(3, Number(state.maxTotalDuration) || 15);
+  const perScene = Math.max(2, Math.min(6, Math.floor((maxTotal / Math.max(1, groupCount)) * 10) / 10));
+
+  if(isT2v){
+    setStatus('auto-gen','loading',`② T2V 모드 · 이미지 스킵 · 씬당 ${perScene}초 (총 상한 ${maxTotal}초)`);
+    state.done.character = true;
+    state.sceneImages = new Array(groupCount).fill(null);
+    state.done.images = true;
+    // 씬별 목표 길이를 T2V 클립 길이에 맞춰 통일 → EDL·나레이션 분배가 어긋나지 않게.
+    (state.scriptTable||[]).forEach(r=>{ r.targetDur = perScene; });
+    if(Array.isArray(state.visualGroups)){
+      state.visualGroups.forEach(g=>{ g.paceDur = perScene; });
+    }
   }else{
-    setStatus('auto-gen','loading','② 등장인물 생성 중...');
-    await generateAllCastAndOptionalProps();
-  }
-  state.done.character = true;
-
-  setStatus('auto-gen','loading',`③ 씬 이미지 생성 중 (0/${state.visualGroups.length})...`);
-  if(!Array.isArray(state.sceneImages)) state.sceneImages = [];
-  if(state.sceneImages.length !== state.visualGroups.length){
-    state.sceneImages = new Array(state.visualGroups.length).fill(null).map((_, i)=> state.sceneImages[i] || null);
-  }
-  const sceneFailures = [];
-  for(let i=0;i<state.visualGroups.length;i++){
-    if(state.sceneImages[i]?.url){
-      setStatus('auto-gen','loading',`③ 씬 이미지 재사용 (${i+1}/${state.visualGroups.length})...`);
-      continue;
+    if(isStoryAuto){
+      setStatus('auto-gen','loading','② 이야기에서 주인공·조연·소품 분석 후 캐릭터 생성 중...');
+      await runAutoAnalyzeAndDrawAllCast();
+    }else{
+      setStatus('auto-gen','loading','② 등장인물 생성 중...');
+      await generateAllCastAndOptionalProps();
     }
-    try{
-      const img = await callHiggsfieldSceneImage(state.visualGroups[i], state.character);
-      state.sceneImages[i] = img;
-    }catch(err){
-      console.warn('씬 이미지 실패 (scene ' + (i+1) + '):', err?.message || err);
-      state.sceneImages[i] = null;
-      sceneFailures.push({ index:i, kind:'image', message:String(err?.message||err) });
-    }
-    setStatus('auto-gen','loading',`③ 씬 이미지 생성 중 (${i+1}/${state.visualGroups.length})...`);
-  }
-  const okImageCount = state.sceneImages.filter(s=>s?.url).length;
-  if(!okImageCount) throw new Error('모든 씬 이미지 생성이 실패했어요. Higgsfield 응답을 확인하세요.');
-  state.done.images = okImageCount === state.visualGroups.length;
+    state.done.character = true;
 
-  setStatus('auto-gen','loading',`④ 영상 클립 생성 중 (0/${state.sceneImages.length})...`);
+    setStatus('auto-gen','loading',`③ 씬 이미지 생성 중 (0/${groupCount})...`);
+    if(!Array.isArray(state.sceneImages)) state.sceneImages = [];
+    if(state.sceneImages.length !== groupCount){
+      state.sceneImages = new Array(groupCount).fill(null).map((_, i)=> state.sceneImages[i] || null);
+    }
+    const sceneFailures = [];
+    for(let i=0;i<groupCount;i++){
+      if(state.sceneImages[i]?.url){
+        setStatus('auto-gen','loading',`③ 씬 이미지 재사용 (${i+1}/${groupCount})...`);
+        continue;
+      }
+      try{
+        const img = await callHiggsfieldSceneImage(state.visualGroups[i], state.character);
+        state.sceneImages[i] = img;
+      }catch(err){
+        console.warn('씬 이미지 실패 (scene ' + (i+1) + '):', err?.message || err);
+        state.sceneImages[i] = null;
+        sceneFailures.push({ index:i, kind:'image', message:String(err?.message||err) });
+      }
+      setStatus('auto-gen','loading',`③ 씬 이미지 생성 중 (${i+1}/${groupCount})...`);
+    }
+    const okImageCount = state.sceneImages.filter(s=>s?.url).length;
+    if(!okImageCount) throw new Error('모든 씬 이미지 생성이 실패했어요. Higgsfield 응답을 확인하세요.');
+    state.done.images = okImageCount === groupCount;
+    state.sceneFailures = sceneFailures;
+  }
+
+  setStatus('auto-gen','loading', isT2v
+    ? `③ T2V 클립 생성 중 (0/${groupCount}) · 씬당 ${perScene}초`
+    : `④ 영상 클립 생성 중 (0/${groupCount})...`);
   if(!Array.isArray(state.clips)) state.clips = [];
-  if(state.clips.length !== state.sceneImages.length){
-    state.clips = new Array(state.sceneImages.length).fill(null).map((_, i)=> state.clips[i] || null);
+  if(state.clips.length !== groupCount){
+    state.clips = new Array(groupCount).fill(null).map((_, i)=> state.clips[i] || null);
   }
-  for(let i=0;i<state.sceneImages.length;i++){
-    if(!state.sceneImages[i]?.url){
+  const sceneFailures = state.sceneFailures || [];
+  for(let i=0;i<groupCount;i++){
+    if(!isT2v && !state.sceneImages[i]?.url){
       state.clips[i] = null;
       continue;
     }
     if(state.clips[i]?.url){
-      setStatus('auto-gen','loading',`④ 클립 재사용 (${i+1}/${state.sceneImages.length})...`);
+      setStatus('auto-gen','loading',`${isT2v?'③':'④'} 클립 재사용 (${i+1}/${groupCount})...`);
       continue;
     }
     try{
-      const clip = await callHiggsfieldMotion(state.sceneImages[i], state.visualGroups[i]);
+      const clip = isT2v
+        ? await callHiggsfieldTextToVideo(state.visualGroups[i], perScene)
+        : await callHiggsfieldMotion(state.sceneImages[i], state.visualGroups[i]);
       state.clips[i] = clip;
     }catch(err){
       console.warn('클립 실패 (scene ' + (i+1) + '):', err?.message || err);
       state.clips[i] = null;
       sceneFailures.push({ index:i, kind:'clip', message:String(err?.message||err) });
     }
-    setStatus('auto-gen','loading',`④ 영상 클립 생성 중 (${i+1}/${state.sceneImages.length})...`);
+    setStatus('auto-gen','loading', isT2v
+      ? `③ T2V 클립 생성 중 (${i+1}/${groupCount})...`
+      : `④ 영상 클립 생성 중 (${i+1}/${groupCount})...`);
   }
   const okClipCount = state.clips.filter(c=>c?.url).length;
-  if(!okClipCount) throw new Error('모든 클립 생성이 실패했어요. 씬 이미지는 있지만 모션 API에서 실패했습니다.');
-  state.done.video = okClipCount === state.sceneImages.length;
+  if(!okClipCount) throw new Error('모든 클립 생성이 실패했어요. Higgsfield 응답을 확인하세요.');
+  state.done.video = okClipCount === groupCount;
 
   state.sceneFailures = sceneFailures;
 
@@ -8521,6 +8579,8 @@ function collectSettingsFromInputs(){
   state.keys.hfCharacterModel = migrateHfModelSlug(document.getElementById('in-model-char')?.value, DEFAULT_KEYS.hfCharacterModel);
   state.keys.hfImageModel = migrateHfModelSlug(document.getElementById('in-model-image')?.value, DEFAULT_KEYS.hfImageModel);
   state.keys.hfVideoModel = migrateHfModelSlug(document.getElementById('in-model-video')?.value, DEFAULT_KEYS.hfVideoModel);
+  const t2vEl = document.getElementById('in-model-t2v');
+  if(t2vEl) state.keys.hfT2vModel = migrateHfModelSlug(t2vEl.value, DEFAULT_KEYS.hfT2vModel);
   state.keys.hfAudioModel = migrateHfModelSlug(document.getElementById('in-model-audio')?.value, DEFAULT_KEYS.hfAudioModel);
   state.keys.hfAudioVariant = document.getElementById('in-hf-audio-variant')?.value ?? state.keys.hfAudioVariant;
   state.keys.hfAudioVoiceId = document.getElementById('in-hf-audio-voice')?.value ?? state.keys.hfAudioVoiceId;
@@ -17049,6 +17109,52 @@ async function callHiggsfieldMotion(sceneImage, group){
   const output = await hfSubmit(state.keys.hfVideoModel, {
     prompt: specificPrompt,
     first_frame_image: sceneImage.url,
+    enhance_prompt: true,
+  });
+  return { url: extractMediaUrl(output) };
+}
+
+/** 텍스트→영상 직접 생성 — 씬 이미지 없이 대본 씬 프롬프트로 바로 클립 생성 */
+async function callHiggsfieldTextToVideo(group, targetDur){
+  collectWorldAssetsFromUI();
+  const artNote = ART_STYLES[state.artStyle]?.prompt || ART_STYLES.cinematic.prompt;
+  const assetNote = buildWorldAssetPromptNote();
+  const propFidelityNote = buildScenePropFidelityPrompt(group);
+  const isStory = (state.scriptMode==='story') && state.selectedStoryPlan!=null;
+  const storyContext = isStory ? buildStoryVisualContext(group) : '';
+  const userBrief = originalUserBriefExcerpt();
+  const heroContinuityLine = state.heroType === 'animal'
+    ? '동물 주인공 종·품종·색·무늬를 씬마다 동일하게 유지. 사람 얼굴은 프레임 안에 넣지 말 것.'
+    : '주인공 얼굴·헤어·복장을 씬마다 동일하게 유지.';
+  const dur = Math.max(2, Math.min(6, Number(targetDur) || 3));
+  const specificPrompt = [
+    '세로형 미니 영화 한 컷 · 대본 씬을 바로 영상으로 촬영.',
+    userBrief ? '원본 사용자 입력: ' + userBrief : '',
+    isStory ? storyContext : '',
+    '현재 컷 내용: ' + (group.imagePrompt || group.visual || ''),
+    group.beat ? '극적 기능: ' + group.beat : '',
+    group.emotion ? '감정 리듬: ' + group.emotion : '',
+    group.shots?.length ? '샷: ' + group.shots.join(', ') : '',
+    group.angles?.length ? '앵글: ' + group.angles.join(', ') : '',
+    group.soundCue ? '효과음 타점: ' + group.soundCue : '',
+    group.musicCue ? 'BGM 박자/무드: ' + group.musicCue : '',
+    group.editRhythm ? '편집 리듬: ' + group.editRhythm : '',
+    group.spectacle ? '장르감: ' + group.spectacle : '',
+    heroContinuityLine,
+    assetNote ? assetNote + '.' : '',
+    propFidelityNote ? propFidelityNote + '.' : '',
+    '카메라 워크: 1~2초 안에 푸시인/패닝/틸트/시선 이동/순간 정지 후 히트 중 하나. 2초 이상 정지 금지.',
+    '아트 스타일: ' + artNote + '.',
+    '화면비: ' + (state.aspectRatio || '9:16') + ' 세로 숏폼.',
+    '화면에 텍스트·자막·워터마크·로고 생성 금지.',
+    group.negativePrompt || ''
+  ].filter(Boolean).join(' ').replace(/\s+/g,' ').trim();
+  const t2vModel = state.keys.hfT2vModel || DEFAULT_KEYS.hfT2vModel;
+  if(!t2vModel) throw new Error('T2V 모델 슬러그가 비어 있어요. 설정에서 텍스트→영상 모델을 입력해 주세요.');
+  const output = await hfSubmit(t2vModel, {
+    prompt: specificPrompt,
+    aspect_ratio: state.aspectRatio || '9:16',
+    duration: dur,
     enhance_prompt: true,
   });
   return { url: extractMediaUrl(output) };
