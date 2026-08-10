@@ -742,6 +742,22 @@
   .preset-card h4{font-size:14.5px; font-weight:800; margin:0 0 6px;}
   @media (max-width: 720px){ .preset-grid{grid-template-columns:1fr;} }
 
+  /* Template hub */
+  .tpl-grid{display:grid; gap:14px;}
+  .tpl-card{
+    background:#fff; border:1.5px solid var(--border); border-radius:16px; overflow:hidden;
+    transition:border-color .12s ease, box-shadow .12s ease, transform .12s ease;
+  }
+  .tpl-card:hover{transform:translateY(-1px);}
+  .tpl-head{
+    width:100%; display:flex; align-items:center; gap:14px; padding:16px 18px;
+    background:transparent; border:none; cursor:pointer; font:inherit; color:inherit;
+  }
+  .tpl-icon{width:52px; height:52px; border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:26px; flex-shrink:0;}
+  .tpl-title{font-size:17px; font-weight:800; margin-bottom:3px;}
+  .tpl-tag{font-size:12.5px; color:var(--text-lo);}
+  .tpl-body{padding:6px 18px 18px; border-top:1px solid var(--border);}
+
   /* ---------- VIDEO EDITOR (직접 소스 영상 조립) ---------- */
   .editor-layout{display:grid; grid-template-columns:1fr 300px; gap:18px; align-items:start;}
   .editor-main{min-width:0;}
@@ -2692,6 +2708,221 @@ const FEATURES = [
   { id:'settings',   icon:'⚙️', title:'API 설정',    desc:'Claude·ChatGPT·Gemini 선택 및 키 관리' },
 ];
 
+/* __SSS_TEMPLATE_HUB_V1__ */
+const HOME_TEMPLATES = [
+  {
+    id:'story-cinema',
+    icon:'🎬',
+    title:'스토리 영상',
+    tagline:'아이디어만 넣으면 미니 시네마 15초',
+    accent:'#2955C8',
+    fields:[
+      { key:'storyInput', kind:'textarea', label:'스토리 아이디어', placeholder:'예) 퇴근길에 우연히 만난 낯선 검은 고양이가 나를 어느 골목으로 안내한다', rows:5, required:true },
+    ],
+  },
+  {
+    id:'product-ad',
+    icon:'🛍',
+    title:'상품 광고',
+    tagline:'상품 이미지 + 짧은 특징 → 15초 광고',
+    accent:'#F0781E',
+    fields:[
+      { key:'productImages', kind:'imageMulti', label:'상품 이미지', hint:'정면·측면·사용컷 자유. 여러 장 가능', required:true },
+      { key:'productBrief', kind:'textarea', label:'상품명 + 특징 한두 줄', placeholder:'예) 무선 미니 가습기, 400ml, 좁은 책상에서도 조용하고 밤새 사용 가능', rows:3, required:true },
+    ],
+  },
+  {
+    id:'character-ad',
+    icon:'🐾',
+    title:'캐릭터 광고 (동물)',
+    tagline:'상품 + 동물 주인공 + 짧은 스토리 → 15초 광고',
+    accent:'#DC2626',
+    fields:[
+      { key:'productImages', kind:'imageMulti', label:'상품 이미지', hint:'광고할 상품', required:true },
+      { key:'heroAnimalSpecies', kind:'text', label:'동물 주인공', placeholder:'예) 삼색 코숏 고양이, 4개월, 호기심 많음', required:true },
+      { key:'storyInput', kind:'textarea', label:'짧은 스토리 (동물이 상품을 사용/반응하는 내용)', placeholder:'예) 자동 급식기가 처음 열리는 순간, 3분간의 심리전. 결국 궁금해서 다가간다', rows:4, required:true },
+    ],
+  },
+];
+
+function templateFormField(t, f){
+  const val = state.templateForm?.[t.id]?.[f.key] || '';
+  if(f.kind === 'textarea'){
+    return `
+      <div class="field">
+        <label>${escHtml(f.label)}${f.required?' <span style="color:#DC2626;">*</span>':''}</label>
+        <textarea data-tpl-field="${t.id}::${f.key}" rows="${f.rows||4}" placeholder="${escHtml(f.placeholder||'')}">${escHtml(val)}</textarea>
+      </div>`;
+  }
+  if(f.kind === 'text'){
+    return `
+      <div class="field">
+        <label>${escHtml(f.label)}${f.required?' <span style="color:#DC2626;">*</span>':''}</label>
+        <input type="text" data-tpl-field="${t.id}::${f.key}" value="${escHtml(val)}" placeholder="${escHtml(f.placeholder||'')}">
+      </div>`;
+  }
+  if(f.kind === 'imageMulti'){
+    const imgs = state.productImages || [];
+    return `
+      <div class="field">
+        <label>${escHtml(f.label)}${f.required?' <span style="color:#DC2626;">*</span>':''}</label>
+        <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(90px, 1fr)); gap:8px;">
+          ${imgs.map((img,i)=>`
+            <div style="position:relative; aspect-ratio:1/1; border:1px solid var(--border); border-radius:10px; overflow:hidden; background:#F7FAFF;">
+              <img src="data:${img.mime||'image/png'};base64,${img.b64}" alt="" style="width:100%; height:100%; object-fit:cover;">
+              <button type="button" data-tpl-remove-image="${i}" style="position:absolute; top:2px; right:2px; background:rgba(220,38,38,0.9); color:#fff; border:none; border-radius:6px; width:22px; height:22px; font-size:12px; cursor:pointer;">✕</button>
+            </div>
+          `).join('')}
+          <label style="aspect-ratio:1/1; border:1.5px dashed #B7D3F5; border-radius:10px; display:flex; align-items:center; justify-content:center; cursor:pointer; background:#F7FAFF; font-size:12px; color:var(--violet); font-weight:700; text-align:center; line-height:1.3;">
+            + 이미지<br>추가
+            <input type="file" accept="image/*" multiple data-tpl-image-input hidden>
+          </label>
+        </div>
+        ${f.hint ? `<div class="settings-note" style="margin-top:4px; font-size:11.5px;">${escHtml(f.hint)}</div>` : ''}
+      </div>`;
+  }
+  return '';
+}
+
+function templateAdvancedHtml(t){
+  const adv = state.templateAdvanced || {};
+  return `
+    <details style="margin-top:10px;">
+      <summary style="cursor:pointer; font-size:12.5px; font-weight:700; color:var(--text-lo);">🛠 고급 옵션</summary>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:8px; margin-top:10px;">
+        <div class="field" style="margin:0;">
+          <label style="font-size:12px;">생성 방식</label>
+          <select data-tpl-adv="genMode">
+            <option value="quality" ${adv.genMode!=='fast'?'selected':''}>고품질 (이미지→영상 · 권장)</option>
+            <option value="fast" ${adv.genMode==='fast'?'selected':''}>빠름 (T2V · 저크레딧)</option>
+          </select>
+        </div>
+        <div class="field" style="margin:0;">
+          <label style="font-size:12px;">완성 길이 (초)</label>
+          <input type="number" min="5" max="60" step="1" value="${adv.totalDur || (t.id==='story-cinema'?20:15)}" data-tpl-adv="totalDur">
+        </div>
+        <div class="field" style="margin:0;">
+          <label style="font-size:12px;">대사 방식</label>
+          <select data-tpl-adv="narration">
+            <option value="auto-ai" ${(adv.narration||'auto-ai')==='auto-ai'?'selected':''}>AI 자동 (권장)</option>
+            <option value="sfx-only" ${adv.narration==='sfx-only'?'selected':''}>대사 없이 효과음만</option>
+          </select>
+        </div>
+        <div class="field" style="margin:0;">
+          <label style="font-size:12px;">화면비</label>
+          <select data-tpl-adv="aspect">
+            ${Object.keys(ASPECT_RATIOS).map(k=>`<option value="${k}" ${(adv.aspect||'9:16')===k?'selected':''}>${k}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+    </details>
+  `;
+}
+
+function templateCardHtml(t, isOpen){
+  return `
+    <div class="tpl-card ${isOpen?'open':''}" style="border-color:${t.accent}33; ${isOpen?`border-color:${t.accent}; box-shadow:0 8px 28px ${t.accent}22;`:''}">
+      <button type="button" class="tpl-head" data-tpl-toggle="${t.id}" style="background:linear-gradient(135deg, ${t.accent}12, transparent);">
+        <div class="tpl-icon" style="background:${t.accent}20; color:${t.accent};">${t.icon}</div>
+        <div style="flex:1; text-align:left; min-width:0;">
+          <div class="tpl-title" style="color:${t.accent};">${escHtml(t.title)}</div>
+          <div class="tpl-tag">${escHtml(t.tagline)}</div>
+        </div>
+        <div style="font-size:20px; color:var(--text-lo);">${isOpen?'▾':'▸'}</div>
+      </button>
+      ${isOpen ? `
+        <div class="tpl-body">
+          ${t.fields.map(f => templateFormField(t, f)).join('')}
+          ${templateAdvancedHtml(t)}
+          <div style="margin-top:12px;">
+            <button type="button" class="btn" data-tpl-launch="${t.id}" style="width:100%; padding:14px; font-size:15px; font-weight:800; background:${t.accent}; border-color:${t.accent};">▶ 만들기 (자동 생성 시작)</button>
+            ${statusHtml('tpl-run')}
+          </div>
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+async function launchTemplate(templateId){
+  const t = HOME_TEMPLATES.find(x=>x.id===templateId);
+  if(!t) return;
+  const form = state.templateForm?.[templateId] || {};
+  const adv = state.templateAdvanced || {};
+
+  // 필수 필드 검증
+  for(const f of t.fields){
+    if(!f.required) continue;
+    if(f.kind === 'imageMulti'){
+      if(!(state.productImages||[]).length){
+        setStatus('tpl-run','err','상품 이미지를 최소 한 장 등록해 주세요.');
+        return;
+      }
+    }else{
+      if(!String(form[f.key]||'').trim()){
+        setStatus('tpl-run','err', `"${f.label}" 을(를) 입력해 주세요.`);
+        return;
+      }
+    }
+  }
+
+  // 고급 옵션 → state 반영 (최적 기본값 우선 · 사용자가 바꾼 값 존중)
+  state.t2vMode = adv.genMode === 'fast';
+  state.maxTotalDuration = Math.max(5, Math.min(60, Number(adv.totalDur) || (templateId==='story-cinema'?20:15)));
+  state.narrationSource = adv.narration === 'sfx-only' ? 'sfx-only' : 'auto-ai';
+  state.includeNarration = state.narrationSource !== 'sfx-only';
+  if(state.narrationSource === 'sfx-only') state.keys.narrationMode = 'off';
+  else if(state.keys.narrationMode === 'off') state.keys.narrationMode = 'auto';
+  state.aspectRatio = adv.aspect || '9:16';
+
+  // 템플릿별 필드 → 파이프라인 state 매핑
+  if(templateId === 'story-cinema'){
+    state.scriptMode = 'story';
+    state.heroType = 'human';
+    state.heroAnimalSpecies = '';
+    state.storyInput = String(form.storyInput||'').trim();
+  }else if(templateId === 'product-ad'){
+    state.scriptMode = 'product';
+    state.heroType = 'human';
+    state.heroAnimalSpecies = '';
+    state.productDescription = String(form.productBrief||'').trim();
+    state.storyInput = state.productDescription; // 미러링 (씬 프롬프트 원본 인용용)
+  }else if(templateId === 'character-ad'){
+    state.scriptMode = 'product';
+    state.heroType = 'animal';
+    state.heroAnimalSpecies = String(form.heroAnimalSpecies||'').trim();
+    state.storyInput = String(form.storyInput||'').trim();
+    state.productDescription = state.storyInput; // 상품 브리프로도 사용
+  }
+
+  state.activePreset = null; // 템플릿 실행 후에는 배지 대신 상단 진행 표시로 대체
+  state.templateRunning = templateId;
+  setStatus('tpl-run','loading','자동 생성 준비 중...');
+  render();
+
+  try{
+    if(templateId === 'story-cinema'){
+      state.storyPlans = await callGeminiStoryPlans();
+      selectStoryPlanForProduction(0);
+      state.done.script = true;
+      state.current = 'direction';
+      render();
+      setStatus('tpl-run','loading','스토리 → 캐릭터 → 씬 → 영상 자동 생성 중...');
+      await runAutoVideoPipeline();
+    }else{
+      // product-ad / character-ad — 기존 상품 자동 파이프라인 재사용
+      await runProductAutoVideoFromBrief();
+    }
+    state.templateRunning = null;
+    setStatus('tpl-run','ok','완료! 편집 스튜디오에서 결과를 확인하세요.');
+    state.current = 'studio';
+    render();
+  }catch(err){
+    state.templateRunning = null;
+    setStatus('tpl-run','err', err?.message || String(err));
+  }
+}
+
 function activePresetBadgeHtml(){
   const p = HOME_PRESETS.find(x=>x.id===state.activePreset);
   const bits = [];
@@ -2808,46 +3039,33 @@ function launchPreset(id){
 }
 
 function renderHome(){
-  const doneCount = Object.values(state.done).filter(Boolean).length;
-  const presetCard = (p)=>`
-    <div class="preset-card" style="border-color:${p.accent}22;">
-      <div class="preset-head" style="background:linear-gradient(135deg, ${p.accent}12, transparent);">
-        <div class="preset-icon" style="background:${p.accent}18; color:${p.accent};">${p.icon}</div>
-        <div class="preset-tag" style="color:${p.accent};">${escHtml(p.tag)}</div>
-      </div>
-      <h4 style="margin:8px 0 6px;">${escHtml(p.title)}</h4>
-      <p style="color:var(--text-lo); font-size:13px; line-height:1.55; margin:0 0 12px; min-height:64px;">${escHtml(p.desc)}</p>
-      <button type="button" class="btn" data-launch-preset="${escHtml(p.id)}" style="width:100%; background:${p.accent}; border-color:${p.accent};">이 방식으로 시작 →</button>
-    </div>
-  `;
+  const openId = state.templateOpen || (state.templateRunning || null);
   return `
     <div class="hero">
       <div class="hero-eyebrow">SHOPPING SHORTS STUDIO</div>
-      <div class="hero-title">어떤 방식으로 만들까요?</div>
-      <div class="hero-sub">상품 소스(이미지 vs 웹 검색)와 영상 생성 방식(단계별 vs 바로 영상)을 골라 한 번에 시작합니다. 필요하면 프리셋 선택 후 각 단계에서 세부 옵션을 조정할 수 있어요.</div>
+      <div class="hero-title">3가지 방식 중 하나로 시작하세요</div>
+      <div class="hero-sub">카드를 열어 짧은 폼을 채우고 <b>「▶ 만들기」</b> 하나만 누르면 됩니다. 모든 세부 옵션에는 <b>최적의 기본값</b>이 이미 설정되어 있어요.</div>
     </div>
 
-    <div class="section-label">시작 프리셋 — 상품 광고</div>
-    <div class="preset-grid">
-      ${HOME_PRESETS.slice(0,4).map(presetCard).join('')}
+    <div class="tpl-grid">
+      ${HOME_TEMPLATES.map(t => templateCardHtml(t, openId === t.id)).join('')}
     </div>
 
-    <div class="section-label" style="margin-top:22px;">그 외 — 스토리 · 반려동물</div>
-    <div class="preset-grid">
-      ${HOME_PRESETS.slice(4).map(presetCard).join('')}
-    </div>
-
-    <div class="quick-row" style="margin-top:22px;">
-      <div class="quick-card">
-        <h3>진행 현황</h3>
-        <p>지금까지 ${doneCount}/${STEPS.length}단계를 완료했어요. 이어서 하려면 사이드바에서 원하는 단계를 고르세요.</p>
-        ${state.scriptTable ? `<button class="btn secondary" data-nav="script">이어서 진행하기</button>` : ''}
+    <details class="tpl-advanced-more" style="margin-top:24px;">
+      <summary style="cursor:pointer; font-size:14px; font-weight:800; color:var(--text-lo); padding:12px 16px; background:#F1F5FD; border-radius:12px; list-style:none;">
+        🛠 고급 · 단계별 편집 · 리서치 · 반려동물 실사 재편집
+      </summary>
+      <div style="padding:14px 4px 0; display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:10px;">
+        <button type="button" class="btn secondary" data-nav="analysis" style="justify-content:flex-start; text-align:left;">🔎 영상 소재 리서치 (쿠팡/유튜브)</button>
+        <button type="button" class="btn secondary" data-nav="ytMaterial" style="justify-content:flex-start; text-align:left;">▶ 유튜브 쇼츠 찾기</button>
+        <button type="button" class="btn secondary" data-nav="script" style="justify-content:flex-start; text-align:left;">✍️ 대본만 만들기 (스텝 4)</button>
+        <button type="button" class="btn secondary" data-nav="character" style="justify-content:flex-start; text-align:left;">🎨 캐릭터만 만들기 (스텝 6)</button>
+        <button type="button" class="btn secondary" data-nav="studio" style="justify-content:flex-start; text-align:left;">🎬 편집 스튜디오 (스텝 8)</button>
+        <button type="button" class="btn secondary" data-launch-preset="pet-real" style="justify-content:flex-start; text-align:left;">🐾 반려동물 실사 재편집</button>
+        <button type="button" class="btn secondary" data-nav="settings" style="justify-content:flex-start; text-align:left;">⚙️ API 설정</button>
       </div>
-      <div class="quick-card support-card">
-        <h3>단계별 세부 조정</h3>
-        <p style="margin-bottom:8px;">프리셋으로 시작 후에도 각 단계에서 T2V ↔ i2v, 대사 방식(AI/직접/무대사), 캐릭터 유형(사람/동물) 등을 언제든 변경할 수 있어요.</p>
-      </div>
-    </div>
+      <div class="settings-note" style="margin-top:10px;">사이드바에서 언제든 스텝별로 이동할 수 있습니다.</div>
+    </details>
   `;
 }
 
@@ -9363,6 +9581,32 @@ document.addEventListener('click', async (e)=>{
     return;
   }
 
+  const tplToggleEl = e.target.closest?.('[data-tpl-toggle]');
+  if(tplToggleEl?.dataset.tplToggle){
+    const id = tplToggleEl.dataset.tplToggle;
+    state.templateOpen = state.templateOpen === id ? null : id;
+    if(!state.templateForm) state.templateForm = {};
+    if(!state.templateForm[id]) state.templateForm[id] = {};
+    render();
+    return;
+  }
+
+  const tplRemoveImg = e.target.closest?.('[data-tpl-remove-image]');
+  if(tplRemoveImg){
+    const i = Number(tplRemoveImg.dataset.tplRemoveImage);
+    if(Number.isFinite(i) && Array.isArray(state.productImages)){
+      state.productImages.splice(i, 1);
+      render();
+    }
+    return;
+  }
+
+  const tplLaunchEl = e.target.closest?.('[data-tpl-launch]');
+  if(tplLaunchEl?.dataset.tplLaunch){
+    await launchTemplate(tplLaunchEl.dataset.tplLaunch);
+    return;
+  }
+
   if(e.target.closest?.('[data-clear-pet-refs]')){
     state.petSourceRefs = [];
     render();
@@ -11475,7 +11719,7 @@ document.addEventListener('input', (e)=>{
   }
 });
 
-document.addEventListener('change', (e)=>{
+document.addEventListener('change', async (e)=>{
   if(e.target && e.target.id === 'charUploadInput' && e.target.files?.length){
     setStatus('char-upload','ok', `선택됨: ${e.target.files[0].name} — 「업로드 이미지로 캐릭터 확정」을 누르세요.`);
     return;
@@ -11747,6 +11991,28 @@ document.addEventListener('change', (e)=>{
     state.manualScriptText = e.target.value;
     return;
   }
+
+  // 홈 템플릿 폼 필드 입력
+  const tplField = e.target?.dataset?.tplField;
+  if(tplField){
+    const [tid, key] = tplField.split('::');
+    if(!state.templateForm) state.templateForm = {};
+    if(!state.templateForm[tid]) state.templateForm[tid] = {};
+    state.templateForm[tid][key] = e.target.value;
+    // 실제 파이프라인에서 쓰는 state 도 즉시 동기화
+    if(key === 'storyInput') state.storyInput = e.target.value;
+    if(key === 'productBrief') state.productDescription = e.target.value;
+    if(key === 'heroAnimalSpecies') state.heroAnimalSpecies = e.target.value;
+    return;
+  }
+
+  // 홈 템플릿 고급 옵션
+  const tplAdv = e.target?.dataset?.tplAdv;
+  if(tplAdv){
+    if(!state.templateAdvanced) state.templateAdvanced = {};
+    state.templateAdvanced[tplAdv] = e.target.value;
+    return;
+  }
   if(e.target.id === 'ytMaterialKw'){
     ensureYtMaterial().keyword = e.target.value.trim();
     return;
@@ -11755,6 +12021,23 @@ document.addEventListener('change', (e)=>{
     ensureYtMaterial().minViews = Number(e.target.value)||0;
     return;
   }
+  // 홈 템플릿 이미지 다중 업로드
+  if(e.target?.dataset?.tplImageInput != null || e.target.matches?.('[data-tpl-image-input]')){
+    const files = Array.from(e.target.files || []);
+    if(!files.length) return;
+    if(!Array.isArray(state.productImages)) state.productImages = [];
+    for(const file of files){
+      if(!file.type.startsWith('image/')) continue;
+      try{
+        const b64 = await blobToBase64(file);
+        state.productImages.push({ b64, mime: file.type });
+      }catch(err){ console.warn('이미지 읽기 실패:', err); }
+    }
+    e.target.value = '';
+    render();
+    return;
+  }
+
   if(e.target.id === 'sourceVideoInput'){
     const files = Array.from(e.target.files);
     const remaining = MAX_SOURCE_VIDEOS - state.sourceVideos.length;
