@@ -23105,6 +23105,10 @@ ${buildGovsupportV7Rules("AI 브리핑")}
 - toc: html_content의 h2 흐름과 일치하되 번호 라벨은 넣지 않는다.
 - html_content: 공식 팩트형 도입부 → (설정 시) 인용구 → (설정 시) 핵심요약 카드 → 첫 H2 소제목 → (설정 시) 핵심 데이터 표 1개 → 표 해석 독립 문단 → 나머지 H2 섹션 순서로 작성한다. 표는 html_content 첫 요소가 될 수 없고, 표끼리 연속 배치할 수 없다. 설정에 없는 "핵심 답변" 같은 별도 박스는 만들지 않는다.
 - faq: 기본 4개, 최소 3개, 최대 5개. 질문은 실제 검색 질문처럼, 답변은 160~220자 안팎 완결 단락.
+- ★ FAQ 새 정보 필수: 각 답변에는 본문·요약 카드·표 어디에도 나오지 않은 실질 정보를 최소 1개 포함한다(공식 창구명·확인 경로·예외 상황·기준일·상담 채널 등). 본문을 다시 풀어 설명만 하는 답변은 실격. AEO 인용은 "새 정보"에서 발생한다.
+- ★ 마지막 H2 결론·확인처 필수: 마지막 H2 본문에는 "공식 창구명 + 정보 기준일(예: ${nowContext().year}년 ${nowContext().month}월 기준)" 두 요소를 반드시 한 문장으로 남긴다. 예: "정확한 최신 지원 대상·금액은 복지로 홈페이지(bokjiro.go.kr)에서 ${nowContext().year}년 ${nowContext().month}월 기준으로 다시 확인하세요." 창구·기준일 없이 감상형 요약만 있으면 실격.
+- ★ 인용구 박스 정화 규칙: <blockquote>에는 (1) 명언·격언 (2) 도입 인사("안녕하세요/오늘은/이 글은") (3) 안내형 서두("정리해 보겠습니다/알아보겠습니다") (4) 출처 없는 감상 문구를 절대 넣지 마라. 본문 주제의 판단 기준·주의 포인트·놓치기 쉬운 사실을 2~3문장·60~140자로 압축한다.
+- ★ 3중 반복 금지 (도입부 ↔ 요약 카드 ↔ 첫 H2 첫 문단): 이 세 자리는 역할이 다르다. 도입부=상황+왜 지금 중요한지, 요약 카드=항목형 4축 압축, 첫 H2 첫 문단=정의+표 해석. 같은 문장 뼈대를 세 자리에서 반복하면 실격. 첫 12자가 겹치는지 스스로 검증하고 겹치면 표현을 바꾼다.
 - image_prompts: 데이터 시각화 이미지 프롬프트 ${desiredImages}개. ${imgStyleLabel} 스타일과 table, data visualization, clean infographic, Korean blog thumbnail 조건을 함께 반영한다. 이미지 속 문구는 한국어 한글만, no English text, no watermark 포함.
 - outbound_links: 본문 근거와 직접 관련된 공식·신뢰 출처 2~5개. 목록·캠페인·무관 PDF 금지. URL 불확실하면 생략.
 - checklist: 글 구성 설정 준수, 소제목 번호 없음·자연형 짧은 소제목, 공식 팩트형 도입부, 지시대명사 제거, 첫 H2 아래 핵심 데이터 표, 160~240자 독립 블록, FAQ 3~5개, 공식 출처, 5대 셀프 체크, 추가 이미지 생성용 문구·이미지 프롬프트 준비 여부를 점검 항목으로 담는다.
@@ -27693,7 +27697,173 @@ ${retryLine}`
     try { enforceDiscontinuedProgramAccuracy(result); } catch (_) {}
     try { enforceScheduleClaimAccuracy(result); } catch (_) {}
     try { enforceH2BodyDensity(result); } catch (_) {}
+    try { enforceIntroSummaryH2Overlap(result); } catch (_) {}
+    try { enforceFaqNoveltyHeuristic(result); } catch (_) {}
+    try { enforceFinalH2ConclusionKeywords(result); } catch (_) {}
+    try { enforceBlockquoteQualityCheck(result); } catch (_) {}
     return result;
+  }
+
+  // 도입부·요약 카드·첫 H2 첫 문단이 서로 겹치면 checklist 경고를 남긴다.
+  // AEO는 세 자리가 서로 다른 역할을 맡아야 인용 노출에 유리하다.
+  function enforceIntroSummaryH2Overlap(result) {
+    if (!result || !result.html_content) return;
+    const cat = typeof normalizeCategoryKey === "function" ? normalizeCategoryKey(state && state.category) : "";
+    // 이 관측은 AI 브리핑·통합글쓰기·블로그+쇼핑커넥트에만 적용 (카페·홈판 피드형은 카드 자체가 다름)
+    const blogShop = (typeof isBlogShoppingConnectMode === "function" && isBlogShoppingConnectMode()) || !!(state && state.blogShoppingConnect);
+    if (!blogShop && !["tool", "concept"].includes(cat)) return;
+    let doc;
+    try { doc = new DOMParser().parseFromString(`<div id="__ov">${result.html_content}</div>`, "text/html"); } catch (_) { return; }
+    const wrap = doc.getElementById("__ov");
+    if (!wrap) return;
+    const firstP = wrap.querySelector("p");
+    const intro = firstP ? (firstP.textContent || "").replace(/\s+/g, "").trim() : "";
+    const firstH2 = wrap.querySelector("h2");
+    let firstH2Body = "";
+    if (firstH2) {
+      let node = firstH2.nextElementSibling;
+      while (node && node.tagName && node.tagName.toLowerCase() !== "h2" && node.tagName.toLowerCase() !== "p") node = node.nextElementSibling;
+      if (node && node.tagName && node.tagName.toLowerCase() === "p") firstH2Body = (node.textContent || "").replace(/\s+/g, "").trim();
+    }
+    const items = Array.isArray(result.summary_items) ? result.summary_items.map(s => String(s || "").replace(/\s+/g, "").trim()) : [];
+    const warnings = [];
+    const head = (s) => (s || "").slice(0, 20);
+    if (intro && firstH2Body && head(intro) && head(intro) === head(firstH2Body)) {
+      warnings.push({ item: `[도입부·첫 H2 반복] 도입부 첫 20자와 첫 H2 첫 문단이 같은 문장 뼈대 — 첫 H2를 표 해석·정의로 재작성 필요`, passed: false });
+    }
+    items.forEach((it, i) => {
+      if (!it) return;
+      if (intro && it.length >= 12 && intro.includes(it.slice(0, 16))) {
+        warnings.push({ item: `[도입부·요약 카드 반복] 요약 항목 ${i + 1}이 도입부에 그대로 노출 — 요약은 항목형 압축으로 재작성 필요`, passed: false });
+      }
+      if (firstH2Body && it.length >= 12 && firstH2Body.includes(it.slice(0, 16))) {
+        warnings.push({ item: `[요약·첫 H2 반복] 요약 항목 ${i + 1}이 첫 H2 문단에 그대로 노출 — 첫 H2는 정의·표 해석으로 재작성 필요`, passed: false });
+      }
+    });
+    if (warnings.length) {
+      if (!Array.isArray(result.checklist)) result.checklist = [];
+      // 중복 제거
+      const seenText = new Set(result.checklist.map(c => c && c.item).filter(Boolean));
+      warnings.forEach(w => { if (!seenText.has(w.item)) result.checklist.push(w); });
+    }
+  }
+
+  // FAQ 답변이 본문·요약과 얼마나 겹치는지 대략 감지. 답변 전체가 본문 텍스트에 이미 포함돼 있으면
+  // 새 정보 없음으로 판정 — AEO 인용은 "새 정보"에서 발생하므로 재활용 답변은 경고 대상.
+  function enforceFaqNoveltyHeuristic(result) {
+    if (!result || !Array.isArray(result.faq) || !result.faq.length) return;
+    const cat = typeof normalizeCategoryKey === "function" ? normalizeCategoryKey(state && state.category) : "";
+    const blogShop = (typeof isBlogShoppingConnectMode === "function" && isBlogShoppingConnectMode()) || !!(state && state.blogShoppingConnect);
+    if (!blogShop && !["tool", "concept"].includes(cat)) return;
+    let bodyText = "";
+    try {
+      const tmp = document.createElement("div");
+      tmp.innerHTML = String(result.html_content || "");
+      bodyText = (tmp.textContent || tmp.innerText || "").replace(/\s+/g, "");
+    } catch (_) { bodyText = String(result.html_content || "").replace(/<[^>]*>/g, "").replace(/\s+/g, ""); }
+    const summaryText = Array.isArray(result.summary_items) ? result.summary_items.join("").replace(/\s+/g, "") : "";
+    const corpus = bodyText + summaryText;
+    if (!corpus) return;
+    const warnings = [];
+    result.faq.forEach((f, i) => {
+      const answer = String((f && (f.a || f.answer)) || "").replace(/\s+/g, "");
+      if (answer.length < 40) return;
+      // 답변을 40자 창으로 슬라이싱해 corpus 겹침 비율 측정
+      const windowSize = 24;
+      const step = 12;
+      let windows = 0, hits = 0;
+      for (let p = 0; p + windowSize <= answer.length; p += step) {
+        windows += 1;
+        if (corpus.includes(answer.slice(p, p + windowSize))) hits += 1;
+      }
+      if (windows === 0) return;
+      const overlapRatio = hits / windows;
+      if (overlapRatio >= 0.75) {
+        const qText = String((f && (f.q || f.question)) || "").slice(0, 24) || `FAQ ${i + 1}`;
+        warnings.push({
+          item: `[FAQ 재활용] "${qText}" 답변의 ${Math.round(overlapRatio * 100)}%가 본문·요약과 겹침 — 공식 창구·확인 경로·예외 등 새 정보 최소 1개 추가 필요`,
+          passed: false
+        });
+      }
+    });
+    if (warnings.length) {
+      if (!Array.isArray(result.checklist)) result.checklist = [];
+      warnings.forEach(w => result.checklist.push(w));
+    }
+  }
+
+  // 마지막 H2 본문에 공식 창구·기준일 요소가 없으면 경고.
+  function enforceFinalH2ConclusionKeywords(result) {
+    if (!result || !result.html_content) return;
+    const cat = typeof normalizeCategoryKey === "function" ? normalizeCategoryKey(state && state.category) : "";
+    if (!["tool", "concept"].includes(cat)) return; // AI 브리핑·통합글쓰기 대상
+    let doc;
+    try { doc = new DOMParser().parseFromString(`<div id="__fh">${result.html_content}</div>`, "text/html"); } catch (_) { return; }
+    const wrap = doc.getElementById("__fh");
+    if (!wrap) return;
+    const h2s = Array.from(wrap.querySelectorAll("h2"));
+    if (h2s.length < 2) return;
+    const lastH2 = h2s[h2s.length - 1];
+    let bodyText = "";
+    let node = lastH2.nextSibling;
+    while (node) {
+      if (node.nodeType === 1) bodyText += (node.textContent || "");
+      else if (node.nodeType === 3) bodyText += (node.textContent || "");
+      node = node.nextSibling;
+    }
+    const normalized = bodyText.replace(/\s+/g, "");
+    if (normalized.length < 60) return; // 본문 밀도 검증이 이미 별도로 잡음
+    const hasChannel = /(공식|홈페이지|주민센터|정부24|복지로|국세청|고용24|건강보험|국민연금|서울시청|시청|구청|보건소|콜센터|1350|1345|공단)/.test(normalized);
+    const now = nowContext();
+    const yearRe = new RegExp("(" + now.year + "년|" + now.year + "\\.|" + now.year + "-|기준일|기준\\s*시점|현재 기준)");
+    const hasBaselineDate = yearRe.test(normalized) || /기준\s*시점|현재\s*기준/.test(normalized);
+    const missing = [];
+    if (!hasChannel) missing.push("공식 창구·홈페이지·주민센터 등 확인처");
+    if (!hasBaselineDate) missing.push(now.year + "년 기준일·시점 문장");
+    if (!missing.length) return;
+    const titleText = (lastH2.textContent || "").trim().replace(/\s+/g, " ").slice(0, 28);
+    if (!Array.isArray(result.checklist)) result.checklist = [];
+    result.checklist.push({
+      item: `[마지막 H2 결론 부족] "${titleText}"에 다음이 빠짐: ${missing.join(", ")} — "정확한 최신 정보는 (창구명)에서 ${now.year}년 ${now.month}월 기준으로 확인하세요" 형태로 보강 필요`,
+      passed: false
+    });
+  }
+
+  // 인용구 <blockquote>가 명언·인사·안내 서두 등 부적절 톤이면 경고.
+  function enforceBlockquoteQualityCheck(result) {
+    if (!result || !result.html_content) return;
+    let doc;
+    try { doc = new DOMParser().parseFromString(`<div id="__bq">${result.html_content}</div>`, "text/html"); } catch (_) { return; }
+    const wrap = doc.getElementById("__bq");
+    if (!wrap) return;
+    const quotes = Array.from(wrap.querySelectorAll("blockquote"));
+    if (!quotes.length) return;
+    const warnings = [];
+    const badPatterns = [
+      { re: /^(안녕하세요|반갑습니다|오늘은|오늘\s*소개|이\s*글은|이번\s*글은|이번\s*포스팅|이번 시간)/, tag: "도입 인사·글 소개" },
+      { re: /(정리해\s*드리겠습니다|정리해\s*보겠습니다|알아보겠습니다|살펴보겠습니다|알려\s*드릴게요|알려드릴게요)/, tag: "안내형 서두" },
+      { re: /^(무엇이든|모든|누구나)\s.{0,20}(할 수 있다|가능하다)/, tag: "명언·격언 톤" },
+      { re: /출처\s*[:：]\s*(미상|알 수 없음)/, tag: "출처 미상 인용" }
+    ];
+    quotes.forEach((bq, i) => {
+      const text = (bq.textContent || "").replace(/\s+/g, " ").trim();
+      if (!text) return;
+      if (text.length < 20) {
+        warnings.push({ item: `[인용구 부실] blockquote ${i + 1} 길이 ${text.length}자 — 판단 기준·주의 포인트 2~3문장(60~140자)으로 채우기`, passed: false });
+        return;
+      }
+      const hit = badPatterns.find(p => p.re.test(text));
+      if (hit) {
+        warnings.push({
+          item: `[인용구 톤 오염] blockquote ${i + 1}에 "${hit.tag}" 감지 ("${text.slice(0, 30)}…") — 본문 주제의 판단 기준·주의 포인트 문장으로 교체 필요`,
+          passed: false
+        });
+      }
+    });
+    if (warnings.length) {
+      if (!Array.isArray(result.checklist)) result.checklist = [];
+      warnings.forEach(w => result.checklist.push(w));
+    }
   }
 
   // 각 H2 아래 본문의 글자수(공백 제외)·빈 H2·하한 미달·반복 도입절을 실측해 checklist에 경고로 기록한다.
