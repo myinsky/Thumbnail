@@ -726,6 +726,22 @@
   .feature-go:hover{background:var(--coral); color:#fff;}
   .section-label{font-size:15px; font-weight:800; margin:0 0 14px; color:var(--text-hi);}
 
+  .preset-grid{
+    display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:14px;
+  }
+  .preset-card{
+    background:#fff; border:1.5px solid #E1E8F5; border-radius:14px;
+    padding:14px 14px 16px; display:flex; flex-direction:column;
+    box-shadow:0 1px 2px rgba(28,39,64,0.03), 0 4px 14px rgba(28,39,64,0.04);
+    transition:transform .12s ease, box-shadow .12s ease;
+  }
+  .preset-card:hover{transform:translateY(-2px); box-shadow:0 6px 20px rgba(28,39,64,0.08);}
+  .preset-head{display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:10px; margin:-4px -4px 6px;}
+  .preset-icon{width:36px; height:36px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:18px;}
+  .preset-tag{font-size:11.5px; font-weight:800; text-transform:uppercase; letter-spacing:0.02em;}
+  .preset-card h4{font-size:14.5px; font-weight:800; margin:0 0 6px;}
+  @media (max-width: 720px){ .preset-grid{grid-template-columns:1fr;} }
+
   /* ---------- VIDEO EDITOR (직접 소스 영상 조립) ---------- */
   .editor-layout{display:grid; grid-template-columns:1fr 300px; gap:18px; align-items:start;}
   .editor-main{min-width:0;}
@@ -2676,42 +2692,161 @@ const FEATURES = [
   { id:'settings',   icon:'⚙️', title:'API 설정',    desc:'Claude·ChatGPT·Gemini 선택 및 키 관리' },
 ];
 
+function activePresetBadgeHtml(){
+  const p = HOME_PRESETS.find(x=>x.id===state.activePreset);
+  const bits = [];
+  if(p) bits.push({label: p.icon + ' ' + p.tag, color: p.accent});
+  if(state.t2vMode) bits.push({label:'⚡ T2V 모드', color:'#F0781E'});
+  else if(p && p.id !== 'pet-real') bits.push({label:'🖼️ 이미지→영상', color:'#2955C8'});
+  if(state.heroType === 'animal') bits.push({label:'🐾 동물 주인공', color:'#DC2626'});
+  const ns = state.narrationSource || 'auto-ai';
+  if(ns === 'manual') bits.push({label:'✍️ 직접 대사', color:'#8B5CF6'});
+  else if(ns === 'sfx-only') bits.push({label:'🎬 무대사 · 효과음만', color:'#5C6A88'});
+  else bits.push({label:'🧠 AI 자동 대사', color:'#18A063'});
+  if(!bits.length) return '';
+  return `
+    <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;">
+      ${bits.map(b=>`<span style="display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border-radius:999px; font-size:11.5px; font-weight:800; background:${b.color}18; color:${b.color}; border:1px solid ${b.color}33;">${escHtml(b.label)}</span>`).join('')}
+      <button type="button" class="btn secondary" data-nav="home" style="padding:3px 10px; font-size:11px; margin-left:4px;">프리셋 변경 →</button>
+    </div>`;
+}
+
+/* __SSS_PRESET_LAUNCHER_V1__ */
+const HOME_PRESETS = [
+  {
+    id:'img-attach-i2v',
+    icon:'📎🖼️',
+    tag:'상품 이미지 + 단계별 (고품질)',
+    title:'상품 이미지 첨부 · 이미지→영상',
+    desc:'등록한 상품 이미지의 형태·색상을 그대로 유지해 씬 이미지→영상까지 순차 생성. 광고 품질이 가장 안정적이지만 크레딧이 더 듭니다.',
+    accent:'#2955C8',
+  },
+  {
+    id:'img-attach-t2v',
+    icon:'📎⚡',
+    tag:'상품 이미지 + 바로 영상',
+    title:'상품 이미지 첨부 · 텍스트→영상 (T2V)',
+    desc:'등록한 상품을 참고 이미지로만 쓰고 씬 이미지 단계 스킵. 15초 안팎 짧은 광고를 빠르고 저렴하게 생성.',
+    accent:'#F0781E',
+  },
+  {
+    id:'web-search-i2v',
+    icon:'🌐🖼️',
+    tag:'웹 상품 검색 + 단계별',
+    title:'웹에서 상품 자동 검색 · 이미지→영상',
+    desc:'쿠팡·유튜브에서 상품/리뷰를 자동 검색 → 분석 → 카피·씬 이미지·영상 생성. 리서치부터 광고까지 한 흐름.',
+    accent:'#18A063',
+  },
+  {
+    id:'web-search-t2v',
+    icon:'🌐⚡',
+    tag:'웹 상품 검색 + 바로 영상',
+    title:'웹에서 상품 자동 검색 · 텍스트→영상 (T2V)',
+    desc:'웹에서 상품 리서치 후 씬 이미지 없이 T2V로 바로 클립 생성. 대량 A/B 테스트에 유리.',
+    accent:'#D8B978',
+  },
+  {
+    id:'story-only',
+    icon:'📝',
+    tag:'상품 없이 스토리만',
+    title:'미니 영화 · 스토리부터 자동 생성',
+    desc:'상품 없이 짧은 아이디어만으로 15~30초 미니 시네마 스토리 → 캐릭터 → 씬 → 영상. 서사·감성 콘텐츠용.',
+    accent:'#8B5CF6',
+  },
+  {
+    id:'pet-real',
+    icon:'🐾',
+    tag:'반려동물 · 실사 재편집',
+    title:'반려동물/실사 리액션 재편집',
+    desc:'유튜브·틱톡에서 실제 반려동물·리액션 영상을 찾아 다운로드 도우미로 클립 확보 → 스튜디오에서 자막·컷 편집.',
+    accent:'#DC2626',
+  },
+];
+
+function launchPreset(id){
+  const preset = HOME_PRESETS.find(p=>p.id===id);
+  if(!preset) return;
+  // 공통 초기화 — 잔여 값이 다른 프리셋에 새어들어가지 않게.
+  state.activePreset = id;
+  state.scriptMode = 'product';
+  state.selectedStoryPlan = null;
+  ensureSourceHunt();
+  ensureYtMaterial();
+  switch(id){
+    case 'img-attach-i2v':
+      state.t2vMode = false;
+      state.sourceHunt.track = 'product';
+      state.current = 'script';   // Step 4 (제품 홍보 상단의 이미지 등록 카드 바로 사용)
+      break;
+    case 'img-attach-t2v':
+      state.t2vMode = true;
+      state.sourceHunt.track = 'product';
+      state.current = 'script';
+      break;
+    case 'web-search-i2v':
+      state.t2vMode = false;
+      state.sourceHunt.track = 'product';
+      state.current = 'analysis'; // Step 2 검색으로 시작
+      break;
+    case 'web-search-t2v':
+      state.t2vMode = true;
+      state.sourceHunt.track = 'product';
+      state.current = 'analysis';
+      break;
+    case 'story-only':
+      state.t2vMode = false;
+      state.scriptMode = 'story';
+      state.current = 'script';
+      break;
+    case 'pet-real':
+      state.sourceHunt.track = 'pet';
+      state.sourceHunt.enabled = { youtube:true, tiktok:true, coupang:false, douyin:false, xhs:false };
+      state.current = 'analysis';
+      break;
+  }
+  render();
+}
+
 function renderHome(){
   const doneCount = Object.values(state.done).filter(Boolean).length;
+  const presetCard = (p)=>`
+    <div class="preset-card" style="border-color:${p.accent}22;">
+      <div class="preset-head" style="background:linear-gradient(135deg, ${p.accent}12, transparent);">
+        <div class="preset-icon" style="background:${p.accent}18; color:${p.accent};">${p.icon}</div>
+        <div class="preset-tag" style="color:${p.accent};">${escHtml(p.tag)}</div>
+      </div>
+      <h4 style="margin:8px 0 6px;">${escHtml(p.title)}</h4>
+      <p style="color:var(--text-lo); font-size:13px; line-height:1.55; margin:0 0 12px; min-height:64px;">${escHtml(p.desc)}</p>
+      <button type="button" class="btn" data-launch-preset="${escHtml(p.id)}" style="width:100%; background:${p.accent}; border-color:${p.accent};">이 방식으로 시작 →</button>
+    </div>
+  `;
   return `
     <div class="hero">
       <div class="hero-eyebrow">SHOPPING SHORTS STUDIO</div>
-      <div class="hero-title">영상 소재부터, 또는<br>기획·대본부터</div>
-      <div class="hero-sub">상품명·키워드로 쇼츠 소재를 먼저 찾고, 아이디어만 있으면 기획·대본부터 시작해 스타일을 고르고 영상까지 이어갈 수 있어요.</div>
-      <div style="display:flex; gap:10px; flex-wrap:wrap;">
-        <button class="btn" data-nav="analysis">🔎 영상 소재 찾기 →</button>
-        <button class="btn secondary" id="startFromScriptBtn" type="button">🎬 기획·대본부터 →</button>
-      </div>
+      <div class="hero-title">어떤 방식으로 만들까요?</div>
+      <div class="hero-sub">상품 소스(이미지 vs 웹 검색)와 영상 생성 방식(단계별 vs 바로 영상)을 골라 한 번에 시작합니다. 필요하면 프리셋 선택 후 각 단계에서 세부 옵션을 조정할 수 있어요.</div>
     </div>
 
-    <div class="quick-row">
+    <div class="section-label">시작 프리셋 — 상품 광고</div>
+    <div class="preset-grid">
+      ${HOME_PRESETS.slice(0,4).map(presetCard).join('')}
+    </div>
+
+    <div class="section-label" style="margin-top:22px;">그 외 — 스토리 · 반려동물</div>
+    <div class="preset-grid">
+      ${HOME_PRESETS.slice(4).map(presetCard).join('')}
+    </div>
+
+    <div class="quick-row" style="margin-top:22px;">
       <div class="quick-card">
         <h3>진행 현황</h3>
-        <p>지금까지 ${doneCount}/${STEPS.length}단계를 완료했어요. 이어서 진행하시려면 사이드바에서 원하는 단계를 선택하세요.</p>
-        <button class="btn secondary" data-nav="${state.scriptTable ? 'script' : 'analysis'}">이어서 진행하기</button>
+        <p>지금까지 ${doneCount}/${STEPS.length}단계를 완료했어요. 이어서 하려면 사이드바에서 원하는 단계를 고르세요.</p>
+        ${state.scriptTable ? `<button class="btn secondary" data-nav="script">이어서 진행하기</button>` : ''}
       </div>
       <div class="quick-card support-card">
-        <h3>도움이 필요하신가요?</h3>
-        <div class="phone">힉스필드 API</div>
-        <p style="margin-bottom:0;">엔드포인트·요금 관련 문의는 힉스필드 개발자 대시보드에서 확인하세요.</p>
+        <h3>단계별 세부 조정</h3>
+        <p style="margin-bottom:8px;">프리셋으로 시작 후에도 각 단계에서 T2V ↔ i2v, 대사 방식(AI/직접/무대사), 캐릭터 유형(사람/동물) 등을 언제든 변경할 수 있어요.</p>
       </div>
-    </div>
-
-    <div class="section-label">전체 자동화 단계</div>
-    <div class="feature-grid">
-      ${FEATURES.map(f=>`
-        <div class="feature-card">
-          <div class="feature-icon">${f.icon}</div>
-          <h4>${f.title}</h4>
-          <p>${f.desc}</p>
-          <button class="feature-go" data-nav="${f.id}">바로가기 →</button>
-        </div>
-      `).join('')}
     </div>
   `;
 }
@@ -4596,6 +4731,8 @@ function renderAnalysis(){
       <div class="stage-title">영상 소재 찾기</div>
     </div>
 
+    ${activePresetBadgeHtml()}
+
     ${needsKey ? `
       <div class="banner">
         <span>상품 분석·대본용으로 Claude / ChatGPT / Gemini 중 하나 이상 API 키가 필요해요.</span>
@@ -5061,6 +5198,8 @@ function renderScript(){
       <div class="stage-title">기획 + 대본</div>
     </div>
 
+    ${activePresetBadgeHtml()}
+
     <div class="card" style="margin-bottom:16px;">
       <div class="row" style="gap:8px;">
         <button class="btn ${mode==='product'?'':'secondary'}" data-set-script-mode="product" style="flex:1;">🛍 제품 홍보 영상</button>
@@ -5132,6 +5271,7 @@ function renderDirection(){
       <div class="stage-eyebrow">Step 5 · 미니 영화 연출</div>
       <div class="stage-title">영상 연출안</div>
     </div>
+    ${activePresetBadgeHtml()}
     <div class="settings-note" style="margin-bottom:12px;">스토리 영상은 <b>대사보다 장면·효과음·BGM 리듬</b>이 중심입니다. 여기서 컷 리듬과 효과음 타점을 검수한 뒤 생성합니다.</div>
     ${renderProductionSetupCard()}
     ${navRow('script', 'character', '단계별: 캐릭터로 →')}
@@ -9214,6 +9354,12 @@ document.addEventListener('click', async (e)=>{
       (state.selectedSourceVideos || []).splice(i, 1);
       render();
     }
+    return;
+  }
+
+  const presetEl = e.target.closest?.('[data-launch-preset]');
+  if(presetEl?.dataset.launchPreset){
+    launchPreset(presetEl.dataset.launchPreset);
     return;
   }
 
