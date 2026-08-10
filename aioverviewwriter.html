@@ -4641,13 +4641,17 @@
     color:var(--muted);
     line-height:1.45;
   }
-  .prewrite-image-count-control {
+  .prewrite-image-count-control,
+  .prewrite-inline-control {
     display:flex;
     align-items:center;
     gap:8px;
     margin-top:8px;
+    flex-wrap:wrap;
   }
-  .prewrite-image-count-control select {
+  .prewrite-image-count-control select,
+  .prewrite-inline-control select,
+  .prewrite-inline-control input[type="number"] {
     width:86px;
     height:34px;
     border-radius:9px;
@@ -4656,19 +4660,33 @@
     color:#f4f7ff;
     font-size:13px;
     font-weight:850;
-    padding:0 28px 0 10px;
+    padding:0 10px;
     outline:none;
+  }
+  .prewrite-image-count-control select,
+  .prewrite-inline-control select {
+    padding:0 28px 0 10px;
+    appearance:auto;
+  }
+  .prewrite-inline-control select[data-prewrite-field="quote_position"] {
+    width:126px;
   }
   .prewrite-image-count-control select[data-prewrite-image-style] {
     width:142px;
     border-color:rgba(176,131,255,.38);
     background:rgba(16,18,32,.92);
   }
-  .prewrite-image-count-control em {
+  .prewrite-image-count-control em,
+  .prewrite-inline-control em {
     font-style:normal;
     color:#aeefff;
     font-size:11.5px;
     font-weight:850;
+  }
+  .prewrite-structure-check.is-off .prewrite-inline-control input,
+  .prewrite-structure-check.is-off .prewrite-inline-control select {
+    opacity:.55;
+    border-color:rgba(255,255,255,.15);
   }
   .prewrite-structure-check.is-off {
     opacity:.65;
@@ -10042,16 +10060,81 @@
   
 function prewriteStructureItems(st) {
     return [
-      { key:"intro_on", label:"도입부", desc:(st.intro || 260) + "자 기준" },
-      { key:"quote_on", label:"인용구 박스", desc:"공감·판단 기준 강조" },
-      { key:"summary_on", label:"핵심요약", desc:"4개 요약 카드" },
-      { key:"h2_on", label:"H2 소제목", desc:(st.h2_on === false ? "제외" : (configuredArticleH2TargetCount(st) + "개 기준")) },
-      { key:"table_on", label:"본문 표", desc:(st.table || 0) + "개" },
-      { key:"callout_on", label:"강조 박스", desc:(st.callout || 0) + "개" },
-      { key:"qa_on", label:"자주 묻는 질문(Q&A)", desc:(st.qa_on === false ? "현재 제외" : ((st.qa || 3) + "개")) },
-      { key:"refs_on", label:"출처 링크", desc:(st.refs || 2) + "개 전후" },
-      { key:"image_on", label:"이미지", desc:formatImageCountBreakdown(structureImageCountForCategory(activeStructureKey()), activeStructureKey()), countControl:true }
+      { key:"intro_on", label:"도입부", desc:"독자 상황·검색 의도 도입", control:"intro" },
+      { key:"quote_on", label:"인용구 박스", desc:"공감·판단 기준 강조", control:"quote_position" },
+      { key:"summary_on", label:"핵심요약", desc:"본문 상단 요약 카드", control:"summary" },
+      { key:"h2_on", label:"H2 소제목", desc:(st.h2_on === false ? "제외 (피드형 도메인 기본값)" : "본문 섹션 소제목"), control:"h2" },
+      { key:"table_on", label:"본문 표", desc:"정보 요약·비교 표", control:"table" },
+      { key:"callout_on", label:"강조 박스", desc:"본문 강조·주의 박스", control:"callout" },
+      { key:"qa_on", label:"자주 묻는 질문(Q&A)", desc:(st.qa_on === false ? "현재 제외" : "본문 하단 즉문즉답"), control:"qa" },
+      { key:"refs_on", label:"출처 링크", desc:"본문 하단 신뢰 출처", control:"refs" },
+      { key:"image_on", label:"이미지", desc:formatImageCountBreakdown(structureImageCountForCategory(activeStructureKey()), activeStructureKey()), control:"image", countControl:true }
     ];
+  }
+
+  // 인라인 컨트롤 메타 (min/max/step/unit/mirror input id)
+  const PREWRITE_FIELD_META = {
+    intro:   { min:180, max:520, step:10, unit:"자", mirror:"st_intro",   defaultValue:260 },
+    summary: { min:3,   max:6,   step:1,  unit:"개", mirror:"st_summary", defaultValue:4 },
+    h2:      { min:3,   max:8,   step:1,  unit:"개", mirror:"st_h2",      defaultValue:5 },
+    table:   { min:0,   max:3,   step:1,  unit:"개", mirror:"st_table",   defaultValue:1 },
+    callout: { min:0,   max:6,   step:1,  unit:"개", mirror:"st_callout", defaultValue:2 },
+    qa:      { min:2,   max:6,   step:1,  unit:"개", mirror:"st_qa",      defaultValue:4 },
+    refs:    { min:0,   max:5,   step:1,  unit:"개", mirror:"st_refs",    defaultValue:2 }
+  };
+  const QUOTE_POSITION_OPTIONS = [
+    ["before_intro", "도입 앞"],
+    ["after_intro", "도입 뒤"],
+    ["before_first_h2", "첫 소제목 앞"]
+  ];
+
+  function prewriteInlineControlHtml(item, st, activeKey) {
+    const control = item.control;
+    if (!control) return "";
+    if (control === "image") return prewriteImageCountControlHtml(activeKey);
+    if (control === "quote_position") {
+      const val = st.quote_position || "after_intro";
+      const opts = QUOTE_POSITION_OPTIONS.map(([k, l]) =>
+        '<option value="' + k + '"' + (val === k ? " selected" : "") + '>' + escapeHtml(l) + '</option>'
+      ).join("");
+      return '<span class="prewrite-inline-control"><select data-prewrite-field="quote_position" aria-label="인용구 위치">' + opts + '</select></span>';
+    }
+    const meta = PREWRITE_FIELD_META[control];
+    if (!meta) return "";
+    const raw = Number(st[control]);
+    const value = Number.isFinite(raw) ? Math.max(meta.min, Math.min(meta.max, raw)) : meta.defaultValue;
+    return '<span class="prewrite-inline-control"><input type="number" data-prewrite-field="' + control +
+      '" min="' + meta.min + '" max="' + meta.max + '" step="' + meta.step +
+      '" value="' + value + '" aria-label="' + escapeAttr(item.label) + ' 수량"><em>' + meta.unit + '</em></span>';
+  }
+
+  function applyPrewriteFieldFromControl(field, rawValue) {
+    const key = activeStructureKey();
+    const st = structureFor(key);
+    if (field === "quote_position") {
+      const allowed = QUOTE_POSITION_OPTIONS.map(o => o[0]);
+      const v = allowed.includes(String(rawValue)) ? String(rawValue) : "after_intro";
+      st.quote_position = v;
+      const mirror = document.getElementById("st_quote_position");
+      if (mirror) mirror.value = v;
+    } else {
+      const meta = PREWRITE_FIELD_META[field];
+      if (!meta) return;
+      let v = Math.round(Number(rawValue));
+      if (!Number.isFinite(v)) v = Number(st[field]) || meta.defaultValue;
+      v = Math.max(meta.min, Math.min(meta.max, v));
+      st[field] = v;
+      const mirror = document.getElementById(meta.mirror);
+      if (mirror) mirror.value = String(v);
+    }
+    state.personaSettings = Object.assign({}, state.personaSettings || {}, {
+      touched: true,
+      updatedAt: Date.now(),
+      [field === "quote_position" ? "quote_position" : field]: st[field === "quote_position" ? "quote_position" : field]
+    });
+    syncActiveStructure();
+    if (hasProjectContent()) scheduleProjectAutosave("prewrite-field-" + field);
+    renderPrewriteStructurePanel();
   }
 
   
@@ -10148,7 +10231,7 @@ function renderPrewriteStructurePanel() {
     const note = structureContextLabel(activeKey, state.topicDomain);
     body.innerHTML = '<div class="prewrite-structure-list">' + prewriteStructureItems(st).map(item => {
       const checked = st[item.key] !== false;
-      const control = item.countControl ? prewriteImageCountControlHtml(activeKey) : "";
+      const control = prewriteInlineControlHtml(item, st, activeKey);
       return '<label class="prewrite-structure-check' + (checked ? '' : ' is-off') + '">' +
         '<input type="checkbox" data-prewrite-struct="' + escapeAttr(item.key) + '"' + (checked ? ' checked' : '') + '>' +
         '<span><b>' + escapeHtml(item.label) + '</b><span>' + escapeHtml(item.desc) + '</span>' + control + '</span>' +
@@ -10170,6 +10253,19 @@ function renderPrewriteStructurePanel() {
         ev.stopPropagation();
         applyPrewriteImageStyleFromControl(select);
       };
+    });
+    // 개수·위치 인라인 컨트롤 (도입부·인용구 위치·핵심요약·H2·표·강조·Q&A·출처)
+    body.querySelectorAll("[data-prewrite-field]").forEach(el => {
+      el.onclick = (ev) => ev.stopPropagation();
+      const handler = (ev) => {
+        ev.stopPropagation();
+        applyPrewriteFieldFromControl(el.dataset.prewriteField, el.value);
+      };
+      el.onchange = handler;
+      if (el.tagName === "INPUT") {
+        // number 입력은 blur 시에만 반영 (타이핑 중 자동 클램프로 값이 튀는 것 방지)
+        el.onblur = handler;
+      }
     });
   }
   function isAffiliateProductImageMode() {
