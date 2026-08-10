@@ -1695,10 +1695,36 @@ const STEPS = [
 // 제휴 부업·강의 영상만 끌어오므로 제품 중심 표현으로 대체했습니다.
 const YT_SHOPPING_QUERY_BANK = {
   shopping: ['쇼핑 쇼츠','쿠팡 추천템','추천템 쇼츠','쇼츠 꿀템','내돈내산 추천','구매템 추천','가성비템','생활용품 추천','주방 꿀템','살림템 쇼츠','핫딜 추천','이거 사세요'],
-  idea: ['아이디어 상품','잘 팔리는 상품','인기 상품','꿀템 추천','신박한 제품','생활용품 꿀템','주방 꿀템','살림 꿀템','수납 꿀템','쿠팡 베스트','쿠팡 인기상품'],
+  idea: ['아이디어 상품','잘 팔리는 상품','인기 상품','꿀템 추천','신박한 제품','생활용품 꿀템','주방 꿀템','수납 꿀템','쿠팡 베스트','쿠팡 인기상품'],
 };
+
+/** 반려동물/실사 리액션 쇼츠 — 강아지·고양이 리액션, 몰카, 웃긴 순간 등 */
+const YT_PET_QUERY_BANK = {
+  dog: ['강아지 쇼츠','강아지 리액션','강아지 웃긴','강아지 몰카','강아지 반응','dog shorts','dog reaction','funny dog','dog prank','puppy shorts'],
+  cat: ['고양이 쇼츠','고양이 리액션','고양이 웃긴','냥이 쇼츠','고양이 반응','cat shorts','funny cat','cat reaction','kitten shorts'],
+  mixed: ['반려동물 쇼츠','펫 쇼츠','동물 웃긴','동물 리액션','pet reaction','funny pets','pet fails','animal shorts','animal reaction'],
+};
+const YT_PET_INCLUDE = /강아지|멍멍|댕댕|퍼피|고양이|냥이|야옹|반려|펫|dog|puppy|cat|kitten|pet|animal|리액션|reaction|웃긴|funny|몰카|prank|귀여운|cute|shorts|#shorts/i;
+const YT_PET_EXCLUDE = /사료\s*추천|용품\s*리뷰|훈련\s*강의|입양\s*상담|병원\s*광고|보험\s*가입|playlist|lyrics|ost/i;
+
 const YT_SHOPPING_INCLUDE = /쇼핑|쇼츠|shorts|쿠팡|coupang|추천템|구매템|꿀템|가성비|핫딜|생활용품|주방|살림|리뷰|하울|내돈내산|착용|협찬/i;
 const YT_SHOPPING_EXCLUDE = /뮤직비디오|아이돌|드라마|예능|게임 공략|주식|코인|playlist|lyrics|ost/i;
+
+function huntTrackIncludeRe(track){
+  return track === 'pet' ? YT_PET_INCLUDE : YT_SHOPPING_INCLUDE;
+}
+function huntTrackExcludeRe(track){
+  return track === 'pet' ? YT_PET_EXCLUDE : YT_SHOPPING_EXCLUDE;
+}
+function huntTrackQueryBank(track, sub){
+  if(track === 'pet'){
+    if(sub === 'dog') return YT_PET_QUERY_BANK.dog.slice();
+    if(sub === 'cat') return YT_PET_QUERY_BANK.cat.slice();
+    return YT_PET_QUERY_BANK.mixed.slice();
+  }
+  if(sub === 'idea') return YT_SHOPPING_QUERY_BANK.idea.slice();
+  return YT_SHOPPING_QUERY_BANK.shopping.slice();
+}
 
 /**
  * 「쇼핑 쇼츠 만드는 방법·부업·수익화·자동화」 등 제작 노하우 콘텐츠.
@@ -3683,8 +3709,18 @@ function ensureSourceHunt(){
     };
   }
   if(!state.sourceHunt.enabled) state.sourceHunt.enabled = { youtube:false, coupang:true, tiktok:true, douyin:false, xhs:false };
-  // 2단계에서는 유튜브를 쓰지 않음 (3단계 전용)
-  state.sourceHunt.enabled.youtube = false;
+  const isPet = state.sourceHunt.track === 'pet';
+  if(isPet){
+    // 반려동물 트랙: 유튜브가 가장 큰 실사 리액션 풀. 기본 ON.
+    if(state.sourceHunt.enabled.youtube !== true && state.sourceHunt.enabled.youtube !== false){
+      state.sourceHunt.enabled.youtube = true;
+    }
+    // 쿠팡은 반려동물 트랙에서는 의미 없음.
+    state.sourceHunt.enabled.coupang = false;
+  }else{
+    // 쇼핑 트랙: 유튜브는 3단계 전용.
+    state.sourceHunt.enabled.youtube = false;
+  }
   const lim = Number(state.sourceHunt.limit);
   state.sourceHunt.limit = [10,20,30,50].includes(lim) ? lim : 20;
   if(!Array.isArray(state.selectedSourceVideos)) state.selectedSourceVideos = [];
@@ -3850,7 +3886,7 @@ function huntPublishedBounds(periodId){
 /** 키워드 입력은 선택. 비어 있어도 검색 가능 */
 function resolveHuntKeywordBase(){
   const hunt = ensureSourceHunt();
-  return (
+  const kw = (
     document.getElementById('huntKeywordInput')?.value.trim()
     || document.getElementById('youtubeQueryInput')?.value.trim()
     || document.getElementById('tiktokQueryInput')?.value.trim()
@@ -3861,6 +3897,9 @@ function resolveHuntKeywordBase(){
     || state.coupangQuery
     || ''
   ).trim();
+  if(kw) return kw;
+  if(hunt.track === 'pet') return '반려동물 쇼츠';
+  return '';
 }
 
 /** 도우인·샤오홍슈 등 중국 사이트 여부 */
@@ -3989,7 +4028,10 @@ function syncHuntKeywordFromInputs(){
 function selectedHuntPlatformIds(){
   const hunt = ensureSourceHunt();
   const en = hunt.enabled || {};
-  // 유튜브는 2단계에서 제외 (3단계 전용)
+  if(hunt.track === 'pet'){
+    return ['youtube','tiktok','douyin','xhs'].filter(id => en[id]);
+  }
+  // 쇼핑 트랙: 유튜브는 2단계에서 제외 (3단계 전용)
   const ids = ['coupang','tiktok','douyin','xhs'].filter(id => en[id]);
   if(hunt.track === 'celeb'){
     return ids.filter(id => id === 'tiktok' || id === 'coupang');
@@ -4018,6 +4060,34 @@ async function runHuntSelectedPlatforms(){
 
   for(const id of ids){
     const kw = buildHuntQuery(base, id);
+    if(id === 'youtube'){
+      if(!state.keys.youtubeApiKey){
+        window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(kw || 'pet shorts')}`, '_blank');
+        opened++;
+        notes.push('유튜브 탭');
+      } else {
+        try{
+          const items = await youtubeShoppingShortsSearch({
+            keyword: kw,
+            mode: hunt.track === 'pet' ? 'mixed' : 'shopping',
+            track: hunt.track,
+            period: hunt.period,
+            limit: hunt.limit,
+            duration: 'short',
+            minViews: 0,
+          });
+          const ranked = rankShortsCandidates(items.map(v => ({ ...v, platform:'youtube' }))).slice(0, hunt.limit);
+          shortsPool.push(...ranked);
+          notes.push(`유튜브 ${ranked.length}개`);
+        }catch(err){
+          console.warn('유튜브 검색 실패:', err?.message || err);
+          window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(kw || 'pet shorts')}`, '_blank');
+          opened++;
+          notes.push('유튜브 탭');
+        }
+      }
+      continue;
+    }
     if(id === 'coupang'){
       state.coupangQuery = kw || state.coupangQuery || '';
       if(kw && state.keys.coupangAccessKey && state.keys.coupangSecretKey){
@@ -4528,7 +4598,7 @@ function renderAnalysis(){
         <label>상품명 / 키워드 <span style="color:var(--text-faint); font-weight:500;">(선택 · 비워도 검색 가능)</span></label>
         <input type="text" id="huntKeywordInput" value="${escHtml(kw)}" placeholder="예: 무선 미니 가습기 / ○○ 선크림 / 예능명 가방">
       </div>
-      <div class="hunt-track-row">
+      <div class="hunt-track-row" style="grid-template-columns:repeat(3,1fr);">
         <button type="button" class="hunt-track ${hunt.track==='product'?'active':''}" data-hunt-track="product">
           <b>A. 일반 상품 소재</b>
           <span>리뷰·언박싱·사용 영상 — 선택한 플랫폼</span>
@@ -4536,6 +4606,10 @@ function renderAnalysis(){
         <button type="button" class="hunt-track ${hunt.track==='celeb'?'active':''}" data-hunt-track="celeb">
           <b>B. 연예인·방송 착용</b>
           <span>틱톡·쿠팡 중심 · 착용/사용/협찬 (유튜브는 3단계)</span>
+        </button>
+        <button type="button" class="hunt-track ${hunt.track==='pet'?'active':''}" data-hunt-track="pet">
+          <b>C. 반려동물 · 실사 리액션</b>
+          <span>유튜브·틱톡 강아지·고양이·펫 리액션 쇼츠</span>
         </button>
       </div>
       <div class="field" style="margin-top:12px;">
@@ -4568,12 +4642,17 @@ function renderAnalysis(){
             <button type="button" class="btn secondary" data-source-tab="image" style="padding:8px 14px;">📷 이미지(보조)</button>
           </div>
           <div class="hunt-plat-toggles">
-            ${[
+            ${(hunt.track === 'pet' ? [
+              {id:'youtube', label:'▶ 유튜브', sub:'실사 쇼츠'},
+              {id:'tiktok', label:'🎵 틱톡', sub:'검토'},
+              {id:'douyin', label:'抖 도우인', sub:'검토'},
+              {id:'xhs', label:'小 샤오홍슈', sub:'검토'},
+            ] : [
               {id:'coupang', label:'🛒 쿠팡', sub:'확정·상품'},
               {id:'tiktok', label:'🎵 틱톡', sub:'검토'},
               {id:'douyin', label:'抖 도우인', sub:'검토'},
               {id:'xhs', label:'小 샤오홍슈', sub:'검토'},
-            ].map(p => `
+            ]).map(p => `
               <button type="button" class="hunt-plat-toggle ${hunt.enabled?.[p.id]?'active':''}" data-hunt-plat-toggle="${p.id}">
                 <span>${p.label}</span>
                 <span class="sub">${p.sub}</span>
@@ -4586,8 +4665,8 @@ function renderAnalysis(){
         <div class="hunt-main-right">
           <h4>검색하기</h4>
           <div class="hunt-search-meta">
-            트랙: <b>${hunt.track==='celeb' ? 'B. 연예인·방송 연관' : 'A. 카테고리 기반'}</b><br>
-            카테고리: <b>${escHtml(categoryLabelKo())}</b><br>
+            트랙: <b>${hunt.track==='celeb' ? 'B. 연예인·방송 연관' : hunt.track==='pet' ? 'C. 반려동물 · 실사 리액션' : 'A. 카테고리 기반'}</b><br>
+            ${hunt.track==='pet' ? '기본 키워드: <b>반려동물 쇼츠</b> (검색어 입력 시 조합)<br>' : `카테고리: <b>${escHtml(categoryLabelKo())}</b><br>`}
             기간: <b>${escHtml(huntPeriodDef(period).label)}</b> · 조회수 상위순
           </div>
           <div>
@@ -4679,31 +4758,36 @@ function renderAnalysis(){
             return `<button type="button" class="ax-chip" data-remove-source-video="${i}" title="${escHtml(v.title||'')}">${escHtml(label)}</button>`;
           }).join('')}
         </div>
-        <div class="settings-note">소재를 담은 뒤 쿠팡 탭에서 상품을 매칭하고, 아래에서 상품 정보를 분석하면 대본 단계로 이어져요. 유튜브는 3단계에서 담으세요.</div>
+        ${hunt.track === 'pet' ? `
+          <div class="settings-note">반려동물/실사 트랙: 상품 분석 없이 담은 영상을 곧바로 편집 스튜디오로 보냅니다.</div>
+          <button type="button" class="btn" id="petSendToStudioBtn" style="margin-top:6px;">🎬 편집 스튜디오로 바로 보내기</button>
+        ` : `<div class="settings-note">소재를 담은 뒤 쿠팡 탭에서 상품을 매칭하고, 아래에서 상품 정보를 분석하면 대본 단계로 이어져요. 유튜브는 3단계에서 담으세요.</div>`}
       </div>
     ` : ''}
 
-    <div class="card">
-      <h3>4. 상품 정보 분석 (선택 · 대본용)</h3>
-      <div class="field">
-        <label>실제 리뷰/정보 붙여넣기</label>
-        <textarea id="reviewText" placeholder="예: 국물이 진짜 깊고 얼큰해서 재구매합니다...">${escHtml(state.reviewText||'')}</textarea>
+    ${hunt.track !== 'pet' ? `
+      <div class="card">
+        <h3>4. 상품 정보 분석 (선택 · 대본용)</h3>
+        <div class="field">
+          <label>실제 리뷰/정보 붙여넣기</label>
+          <textarea id="reviewText" placeholder="예: 국물이 진짜 깊고 얼큰해서 재구매합니다...">${escHtml(state.reviewText||'')}</textarea>
+        </div>
+        <div class="field">
+          <label>제품 설명 (선택)</label>
+          <textarea id="productDesc" placeholder="예: OOO 무선 미니 가습기, 400ml...">${escHtml(state.productDescription||'')}</textarea>
+        </div>
+        <button class="btn" id="analyzeBtn" ${canAnalyze?'':'disabled'}>상품 정보 분석하기</button>
+        <div class="settings-note" style="margin-top:8px;">쿠팡 상품을 불러오거나 설명을 넣으면 분석할 수 있어요. 대본 생성 전에 권장합니다.</div>
+        ${statusHtml('analysis')}
       </div>
-      <div class="field">
-        <label>제품 설명 (선택)</label>
-        <textarea id="productDesc" placeholder="예: OOO 무선 미니 가습기, 400ml...">${escHtml(state.productDescription||'')}</textarea>
-      </div>
-      <button class="btn" id="analyzeBtn" ${canAnalyze?'':'disabled'}>상품 정보 분석하기</button>
-      <div class="settings-note" style="margin-top:8px;">쿠팡 상품을 불러오거나 설명을 넣으면 분석할 수 있어요. 대본 생성 전에 권장합니다.</div>
-      ${statusHtml('analysis')}
-    </div>
 
-    ${state.analysis ? analysisReportHtml(state.analysis) : ''}
+      ${state.analysis ? analysisReportHtml(state.analysis) : ''}
 
-    ${(state.selectedCoupang || state.analysis) ? crossPlatformHuntHtml() : ''}
+      ${(state.selectedCoupang || state.analysis) ? crossPlatformHuntHtml() : ''}
+    ` : ''}
 
-    ${navRow('settings', 'ytMaterial', '유튜브 영상 소재 →')}
-    ${!canProceed ? `<div class="settings-note" style="text-align:right; margin-top:8px;">플랫폼 검색 후 3단계에서 유튜브 소재를 더 찾을 수 있어요</div>` : ''}
+    ${navRow('settings', hunt.track === 'pet' ? 'studio' : 'ytMaterial', hunt.track === 'pet' ? '편집 스튜디오 →' : '유튜브 영상 소재 →')}
+    ${!canProceed && hunt.track !== 'pet' ? `<div class="settings-note" style="text-align:right; margin-top:8px;">플랫폼 검색 후 3단계에서 유튜브 소재를 더 찾을 수 있어요</div>` : ''}
   `;
 }
 
@@ -5787,7 +5871,33 @@ function renderImages(){
    STEP 7. 영상 편집 스튜디오 (클립 + 나레이션 + 최종 조립 통합)
 ============================================================ */
 function renderStudio(){
-  return `${renderManualAssembly()}`;
+  return `${petSourceRefsBanner()}${renderManualAssembly()}`;
+}
+
+function petSourceRefsBanner(){
+  const refs = state.petSourceRefs || [];
+  if(!refs.length) return '';
+  return `
+    <div class="card" style="margin-bottom:12px; border:1.5px solid #A9C6FA; background:linear-gradient(180deg,#F7FAFF,#FFFFFF);">
+      <h3 style="margin-bottom:6px;">🐾 반려동물 트랙 · 담은 영상 ${refs.length}개 (참조)</h3>
+      <div class="settings-note" style="margin-bottom:10px;">
+        브라우저는 유튜브·틱톡 영상을 직접 재생하지 못하므로 <b>링크만 참조</b>로 보관돼요.
+        각 링크를 열어 클립을 저장(다운로드)한 뒤, 아래 편집 스튜디오의 <b>소재 업로드</b>로 넣어주세요.
+      </div>
+      <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:10px;">
+        ${refs.map((r,i)=>`
+          <a href="${escHtml(r.url)}" target="_blank" rel="noopener" style="text-decoration:none; color:inherit; border:1px solid var(--border); border-radius:10px; padding:8px; display:flex; gap:8px; background:#fff;">
+            ${r.thumbnail ? `<img src="${escHtml(r.thumbnail)}" alt="" style="width:60px; height:80px; object-fit:cover; border-radius:6px; flex-shrink:0;">` : ''}
+            <div style="min-width:0; flex:1;">
+              <div style="font-size:12.5px; font-weight:700; line-height:1.35; overflow:hidden; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical;">${i+1}. ${escHtml(r.title||'제목 없음')}</div>
+              <div style="font-size:11px; color:var(--text-lo); margin-top:4px;">${escHtml(r.platform||'')}${r.channel?' · '+escHtml(r.channel):''}${r.viewCount?' · '+Number(r.viewCount).toLocaleString():''}</div>
+            </div>
+          </a>
+        `).join('')}
+      </div>
+      <button type="button" class="btn secondary" data-clear-pet-refs style="margin-top:10px; font-size:12px;">참조 목록 지우기</button>
+    </div>
+  `;
 }
 
 // --- AI 소재 생성 패널 (편집기 위에 접이식으로) ---
@@ -8770,14 +8880,12 @@ document.addEventListener('click', async (e)=>{
     hunt.track = trackEl.dataset.huntTrack;
     if(hunt.track === 'celeb'){
       hunt.enabled = { youtube:false, tiktok:true, coupang:!!hunt.enabled?.coupang, douyin:false, xhs:false };
+    }else if(hunt.track === 'pet'){
+      hunt.enabled = { youtube:true, tiktok:true, coupang:false, douyin:false, xhs:false };
+    }else{
+      hunt.enabled = { youtube:false, tiktok:true, coupang:true, douyin:false, xhs:false };
     }
-    document.querySelectorAll('.hunt-track').forEach(el=>{
-      el.classList.toggle('active', el.dataset.huntTrack === hunt.track);
-    });
-    document.querySelectorAll('.hunt-plat-toggle').forEach(el=>{
-      const id = el.dataset.huntPlatToggle;
-      el.classList.toggle('active', !!hunt.enabled?.[id]);
-    });
+    render();
     return;
   }
 
@@ -8950,6 +9058,37 @@ document.addEventListener('click', async (e)=>{
       (state.selectedSourceVideos || []).splice(i, 1);
       render();
     }
+    return;
+  }
+
+  if(e.target.closest?.('[data-clear-pet-refs]')){
+    state.petSourceRefs = [];
+    render();
+    return;
+  }
+
+  if(e.target.id === 'petSendToStudioBtn'){
+    const picks = state.selectedSourceVideos || [];
+    if(!picks.length){
+      setStatus('hunt-multi','err','담은 영상이 없어요.');
+      return;
+    }
+    // 외부(YouTube/TikTok) 영상은 브라우저에서 직접 재생되지 않으므로 링크만 참조로 등록.
+    state.petSourceRefs = picks.map(v => ({
+      platform: v.platform || 'unknown',
+      url: v.url || '',
+      title: v.title || '',
+      channel: v.channel || v.author || '',
+      thumbnail: v.thumbnail || '',
+      viewCount: v.viewCount || 0,
+    }));
+    state.studioMode = 'source';
+    state.scriptMode = 'story';
+    state.done.analysis = true;
+    state.done.script = true;
+    state.current = 'studio';
+    render();
+    setTimeout(()=> setStatus('final','ok','반려동물 트랙: 담은 영상은 참조 링크로 보관됐어요. 실제 클립 파일은 스튜디오에서 업로드하세요.'), 0);
     return;
   }
 
@@ -11622,8 +11761,9 @@ async function youtubeSearch(query, maxResults=5, opts={}){
 
 function ensureYtMaterial(){
   if(!state.ytMaterial || typeof state.ytMaterial !== 'object'){
-    state.ytMaterial = { keyword:'', mode:'shopping', period:'365d', limit:20, minViews:10000, duration:'short' };
+    state.ytMaterial = { keyword:'', mode:'shopping', track:'product', period:'365d', limit:20, minViews:10000, duration:'short' };
   }
+  if(!state.ytMaterial.track) state.ytMaterial.track = 'product';
   const lim = Number(state.ytMaterial.limit);
   state.ytMaterial.limit = [10,20,30,50].includes(lim) ? lim : 20;
   // 과거 'any'(전체 길이) → 롱폼
@@ -11635,7 +11775,15 @@ function ensureYtMaterial(){
 /** BlueThumb식 다중 쿼리 → 쇼츠 필터 → 조회수 상위 */
 function buildYtMaterialQueries(yt){
   const kw = String(yt.keyword||'').trim();
+  const track = yt.track || 'product';
   let bank = [];
+  if(track === 'pet'){
+    // mode 는 pet 세부 카테고리로 재사용 (dog/cat/mixed). 그 외 값이면 mixed.
+    const sub = yt.mode === 'dog' ? 'dog' : yt.mode === 'cat' ? 'cat' : 'mixed';
+    bank = huntTrackQueryBank('pet', sub);
+    if(kw) bank = [kw, ...bank.map(q => `${kw} ${q}`)].slice(0, 12);
+    return uniqueStrings(bank).slice(0, 12);
+  }
   if(yt.mode === 'shopping') bank = YT_SHOPPING_QUERY_BANK.shopping.slice();
   else if(yt.mode === 'idea') bank = YT_SHOPPING_QUERY_BANK.idea.slice();
   else if(yt.mode === 'celeb'){
@@ -11674,22 +11822,28 @@ async function youtubeShoppingShortsSearch(ytOpts={}){
   const pooled = [];
   const dropped = { howto:0, tooLong:0, tooShort:0 };
 
+  const track = yt.track || 'product';
+  const includeRe = huntTrackIncludeRe(track);
+  const excludeRe = huntTrackExcludeRe(track);
+  const isPet = track === 'pet';
+  const strictMode = isPet ? true : (yt.mode === 'shopping' || yt.mode === 'idea');
+
   const absorb = (batch, q, relaxInclude=false)=>{
     for(const v of batch){
       const id = v.id || v.url;
       if(!id || seen.has(id)) continue;
       const title = String(v.title||'');
-      if(isHowToShoppingVideo(v)){ dropped.howto++; continue; }
+      if(!isPet && isHowToShoppingVideo(v)){ dropped.howto++; continue; }
       const sec = ytDurationSec(v.duration);
       if(durationCap != null && sec != null && sec > durationCap){ dropped.tooLong++; continue; }
       // 롱폼 모드: 실제 쇼츠(≤60초)는 제외
       if(!wantShort && sec != null && sec <= 60){ dropped.tooShort++; continue; }
       if(!relaxInclude){
-        if(YT_SHOPPING_EXCLUDE.test(title) && !YT_SHOPPING_INCLUDE.test(title)) continue;
-        if(yt.mode === 'shopping' || yt.mode === 'idea'){
-          if(!YT_SHOPPING_INCLUDE.test(title) && !kwLooseMatch(q, title) && !kwLooseMatch(yt.keyword, title)) continue;
+        if(excludeRe.test(title) && !includeRe.test(title)) continue;
+        if(strictMode){
+          if(!includeRe.test(title) && !kwLooseMatch(q, title) && !kwLooseMatch(yt.keyword, title)) continue;
         }
-      }else if(YT_SHOPPING_EXCLUDE.test(title) && !YT_SHOPPING_INCLUDE.test(title) && !kwLooseMatch(yt.keyword, title)){
+      }else if(excludeRe.test(title) && !includeRe.test(title) && !kwLooseMatch(yt.keyword, title)){
         continue;
       }
       seen.add(id);
