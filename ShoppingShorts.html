@@ -4084,6 +4084,9 @@ function ensureSourceHunt(){
     }
   }
   // 상품/반려동물 트랙 모두 유튜브 사용 가능 (Step 3 흡수).
+  if(!['short','long','cc-long'].includes(state.sourceHunt.videoForm)){
+    state.sourceHunt.videoForm = 'short';
+  }
   const lim = Number(state.sourceHunt.limit);
   state.sourceHunt.limit = [10,20,30,50].includes(lim) ? lim : 20;
   if(!Array.isArray(state.selectedSourceVideos)) state.selectedSourceVideos = [];
@@ -4431,18 +4434,20 @@ async function runHuntSelectedPlatforms(){
         notes.push('유튜브 탭');
       } else {
         try{
+          const form = hunt.videoForm || 'short';
           const items = await youtubeShoppingShortsSearch({
             keyword: kw,
             mode: hunt.track === 'pet' ? 'mixed' : 'shopping',
             track: hunt.track,
             period: hunt.period,
             limit: hunt.limit,
-            duration: 'short',
+            duration: form === 'short' ? 'short' : 'long',
+            license: form === 'cc-long' ? 'creativeCommon' : undefined,
             minViews: 0,
           });
           const ranked = rankShortsCandidates(items.map(v => ({ ...v, platform:'youtube' }))).slice(0, hunt.limit);
           shortsPool.push(...ranked);
-          notes.push(`유튜브 ${ranked.length}개`);
+          notes.push(form === 'cc-long' ? `유튜브 CC롱폼 ${ranked.length}개` : `유튜브 ${ranked.length}개`);
         }catch(err){
           console.warn('유튜브 검색 실패:', err?.message || err);
           window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(kw || defaultKw)}`, '_blank');
@@ -4566,6 +4571,7 @@ function sourceResultsPickHtml(items, platform){
       channel:v.channel||v.author||'', thumbnail:v.thumbnail||'',
       publishedAt:v.publishedAt||'', shortsScore: score, duration: v.duration||'',
       programName: meta.programName||'', airDate: meta.airDate||'', episode: meta.episode||'',
+      ccLicense: !!v.ccLicense,
       description: (v.description||'').slice(0, 1200),
     }));
     const openAttrs = url
@@ -4583,6 +4589,7 @@ function sourceResultsPickHtml(items, platform){
         <div style="min-width:0; flex:1;">
           <a class="src-title" ${openAttrs} title="영상 열기">
             ${i+1}. ${escHtml(v.title||'')}
+            ${v.ccLicense ? '<span class="shorts-badge" style="background:#DCFCE7; color:#15803D;">♻️ CC 리믹스 가능</span>' : ''}
             ${score >= 50 ? '<span class="shorts-badge">쇼츠적합</span>' : ''}
           </a>
           <div style="font-size:12px; color:var(--text-lo); margin-top:2px;">
@@ -4942,6 +4949,30 @@ function renderAnalysis(){
         <div class="hunt-plat-toggles">
           ${corePlatforms.map(platformBtn).join('')}
         </div>
+      </div>
+
+      <div class="field">
+        <label style="font-size:12.5px;">영상 형태 (유튜브)</label>
+        <div class="hunt-track-row" style="grid-template-columns:repeat(3,1fr);">
+          <button type="button" class="hunt-track ${(hunt.videoForm||'short')==='short'?'active':''}" data-hunt-video-form="short" style="min-height:56px;">
+            <b>⚡ 쇼츠</b>
+            <span>60초 이하 · 벤치마크용</span>
+          </button>
+          <button type="button" class="hunt-track ${hunt.videoForm==='long'?'active':''}" data-hunt-video-form="long" style="min-height:56px;">
+            <b>🎥 롱폼</b>
+            <span>1분 이상 · 원본 소재</span>
+          </button>
+          <button type="button" class="hunt-track ${hunt.videoForm==='cc-long'?'active':''}" data-hunt-video-form="cc-long" style="min-height:56px;">
+            <b>♻️ CC 리믹스 롱폼</b>
+            <span>재사용 허가 라이선스만</span>
+          </button>
+        </div>
+        ${hunt.videoForm==='cc-long' ? `
+          <div class="settings-note" style="margin-top:6px; font-size:12px; line-height:1.5;">
+            <b>크리에이티브 커먼즈(CC-BY)</b> 영상만 검색합니다. 편집·재업로드가 허용되지만 <b>원저작자 출처 표기</b>는 필요하고,
+            영상 안에 제3자 저작물(음악·방송장면)이 섞여 있을 수 있으니 확인 후 사용하세요.
+          </div>
+        ` : ''}
       </div>
 
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:6px;">
@@ -6259,7 +6290,7 @@ function petSourceRefsBanner(){
             <a href="${escHtml(r.url)}" target="_blank" rel="noopener" style="text-decoration:none; color:inherit; display:flex; gap:8px; min-width:0;">
               ${r.thumbnail ? `<img src="${escHtml(r.thumbnail)}" alt="" style="width:60px; height:80px; object-fit:cover; border-radius:6px; flex-shrink:0;">` : ''}
               <div style="min-width:0; flex:1;">
-                <div style="font-size:12.5px; font-weight:700; line-height:1.35; overflow:hidden; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical;">${i+1}. ${escHtml(r.title||'제목 없음')} ${matched?'<span style="color:#15803D; font-size:10px;">✓ 업로드됨</span>':''}</div>
+                <div style="font-size:12.5px; font-weight:700; line-height:1.35; overflow:hidden; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical;">${i+1}. ${escHtml(r.title||'제목 없음')} ${r.ccLicense?'<span style="color:#15803D; font-size:10px;">♻️ CC</span>':''} ${matched?'<span style="color:#15803D; font-size:10px;">✓ 업로드됨</span>':''}</div>
                 <div style="font-size:11px; color:var(--text-lo); margin-top:4px;">${escHtml(r.platform||'')}${r.channel?' · '+escHtml(r.channel):''}${r.viewCount?' · '+Number(r.viewCount).toLocaleString():''}</div>
               </div>
             </a>
@@ -9436,6 +9467,17 @@ document.addEventListener('click', async (e)=>{
     return;
   }
 
+  // 영상 형태 (쇼츠/롱폼/CC롱폼)
+  const formEl = e.target.closest?.('[data-hunt-video-form]');
+  if(formEl?.dataset.huntVideoForm){
+    const hunt = syncHuntKeywordFromInputs();
+    hunt.videoForm = formEl.dataset.huntVideoForm;
+    // CC 롱폼은 유튜브 전용 필터 → 유튜브 토글 자동 ON
+    if(hunt.videoForm === 'cc-long') hunt.enabled.youtube = true;
+    render();
+    return;
+  }
+
   // 기간 칩
   const periodEl = e.target.closest?.('[data-hunt-period]');
   if(periodEl?.dataset.huntPeriod){
@@ -9679,6 +9721,7 @@ document.addEventListener('click', async (e)=>{
       channel: v.channel || v.author || '',
       thumbnail: v.thumbnail || '',
       viewCount: v.viewCount || 0,
+      ccLicense: !!v.ccLicense,
     }));
     state.studioMode = 'source';
     state.done.analysis = true;
@@ -12419,6 +12462,10 @@ async function youtubeSearch(query, maxResults=5, opts={}){
   if(opts.duration && opts.duration !== 'any'){
     params.set('videoDuration', opts.duration);
   }
+  // creativeCommon = 리믹스 가능한 CC-BY 라이선스만 (출처 표기 필요)
+  if(opts.license === 'creativeCommon'){
+    params.set('videoLicense', 'creativeCommon');
+  }
 
   const searchRes = await fetch(`https://www.googleapis.com/youtube/v3/search?${params}`);
   const searchData = await searchRes.json().catch(()=>({}));
@@ -12456,6 +12503,8 @@ async function youtubeSearch(query, maxResults=5, opts={}){
       programName: meta.programName,
       airDate: meta.airDate,
       episode: meta.episode,
+      // videos.list 의 status.license 가 정답이지만 part 를 아끼기 위해 검색 필터 사용 여부로 태깅
+      ccLicense: opts.license === 'creativeCommon' ? true : (v.status?.license === 'creativeCommon' || undefined),
     };
   }).sort((a,b)=> Number(b.viewCount||0) - Number(a.viewCount||0));
 }
@@ -12519,6 +12568,7 @@ async function youtubeShoppingShortsSearch(ytOpts={}){
   const apiDuration = wantShort ? 'short' : 'any';
   const durationCap = wantShort ? 180 : null;
   const minViews = Math.max(0, Number(yt.minViews)||0);
+  const ccOnly = yt.license === 'creativeCommon';
   const seen = new Set();
   const pooled = [];
   const dropped = { howto:0, tooLong:0, tooShort:0 };
@@ -12527,7 +12577,8 @@ async function youtubeShoppingShortsSearch(ytOpts={}){
   const includeRe = huntTrackIncludeRe(track);
   const excludeRe = huntTrackExcludeRe(track);
   const isPet = track === 'pet';
-  const strictMode = isPet ? true : (yt.mode === 'shopping' || yt.mode === 'idea');
+  // CC 롱폼 소재 검색은 편집용 원본 확보가 목적 → 제목 강제 매칭 완화
+  const strictMode = ccOnly ? false : (isPet ? true : (yt.mode === 'shopping' || yt.mode === 'idea'));
 
   const absorb = (batch, q, relaxInclude=false)=>{
     for(const v of batch){
@@ -12559,6 +12610,7 @@ async function youtubeShoppingShortsSearch(ytOpts={}){
       duration: apiDuration,
       regionCode: 'KR',
       relevanceLanguage: 'ko',
+      license: ccOnly ? 'creativeCommon' : undefined,
     });
     absorb(batch, q, relaxInclude);
   };
