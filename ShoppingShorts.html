@@ -1903,6 +1903,7 @@ let state = {
   maxTotalDuration: 15,       // 완성 영상 총 길이 상한(초). T2V/i2v 모두 참고.
   narrationSource: 'auto-ai', // 'auto-ai' | 'manual' | 'sfx-only'
   manualScriptText: '',       // narrationSource='manual' 일 때 사용자가 넣는 대사 원문
+  continuityMode: 'chain',    // 'chain' = 첫 이미지 1장 → 클립 연속 확장 (일관성 최우선) | 'per-scene' = 씬마다 새 이미지
   castCount: 2,               // 주목 등장인물 수 (주인공 포함, 군중 제외 · 기본 2)
   drawHero: true,             // 주인공 이미지 생성 여부
   heroSource: 'ai',           // 주인공: ai | upload
@@ -8334,6 +8335,8 @@ function collectProductionOptionsFromUI(){
   }
   const t2vEl = document.getElementById('prodT2vMode');
   if(t2vEl) state.t2vMode = !!t2vEl.checked;
+  const chainEl = document.getElementById('prodChainMode');
+  if(chainEl) state.continuityMode = chainEl.checked ? 'chain' : 'per-scene';
   const maxDurEl = document.getElementById('prodMaxTotalDuration');
   if(maxDurEl){
     const n = Number(maxDurEl.value);
@@ -8470,6 +8473,16 @@ function renderProductionSetupCard(){
         <select id="prodAspectRatio">
           ${Object.keys(ASPECT_RATIOS).map(k=>`<option value="${k}" ${state.aspectRatio===k?'selected':''}>${k}</option>`).join('')}
         </select>
+      </div>
+
+      <div class="field" style="margin-top:4px; padding:12px; border:1.5px solid #B7E3C8; border-radius:10px; background:#F2FBF5;">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:800;">
+          <input type="checkbox" id="prodChainMode" ${state.continuityMode!=='per-scene'?'checked':''}>
+          🔗 연속 확장 모드 — 첫 이미지 1장 → 클립을 이어서 생성 (일관성 최우선 · 권장)
+        </label>
+        <div class="settings-note" style="margin-top:6px; font-size:12.5px; line-height:1.55;">
+          앞 클립의 <b>마지막 프레임</b>이 다음 클립의 <b>첫 프레임</b>이 되어 인물·배경·화풍이 자연스럽게 이어집니다. 끄면 씬마다 새 이미지를 그립니다(장면 변화는 크지만 일관성이 떨어질 수 있음).
+        </div>
       </div>
 
       <div class="field" style="margin-top:4px; padding:12px; border:1.5px dashed #F5C77E; border-radius:10px; background:#FFF8EC;">
@@ -8720,64 +8733,134 @@ async function runAutoVideoPipeline(){
       await generateAllCastAndOptionalProps();
     }
     state.done.character = true;
+  }
 
+  const isChain = !isT2v && state.continuityMode === 'chain';
+
+  if(!isT2v && !isChain){
+    // ── 씬별 개별 이미지 모드 ──
     setStatus('auto-gen','loading',`③ 씬 이미지 생성 중 (0/${groupCount})...`);
     if(!Array.isArray(state.sceneImages)) state.sceneImages = [];
     if(state.sceneImages.length !== groupCount){
       state.sceneImages = new Array(groupCount).fill(null).map((_, i)=> state.sceneImages[i] || null);
     }
-    const sceneFailures = [];
+    const sceneFailures0 = [];
     for(let i=0;i<groupCount;i++){
       if(state.sceneImages[i]?.url){
         setStatus('auto-gen','loading',`③ 씬 이미지 재사용 (${i+1}/${groupCount})...`);
         continue;
       }
       try{
-        const img = await callHiggsfieldSceneImage(state.visualGroups[i], state.character);
+        // 이전 씬 이미지를 참조로 넘겨 배경·화풍·개체 연속성 강화
+        const prevUrl = i > 0 ? state.sceneImages[i-1]?.url : null;
+        const img = await callHiggsfieldSceneImage(state.visualGroups[i], state.character, { prevUrl });
         state.sceneImages[i] = img;
       }catch(err){
         console.warn('씬 이미지 실패 (scene ' + (i+1) + '):', err?.message || err);
         state.sceneImages[i] = null;
-        sceneFailures.push({ index:i, kind:'image', message:String(err?.message||err) });
+        sceneFailures0.push({ index:i, kind:'image', message:String(err?.message||err) });
       }
       setStatus('auto-gen','loading',`③ 씬 이미지 생성 중 (${i+1}/${groupCount})...`);
     }
     const okImageCount = state.sceneImages.filter(s=>s?.url).length;
     if(!okImageCount) throw new Error('모든 씬 이미지 생성이 실패했어요. Higgsfield 응답을 확인하세요.');
     state.done.images = okImageCount === groupCount;
-    state.sceneFailures = sceneFailures;
+    state.sceneFailures = sceneFailures0;
+  }else if(isChain){
+    // ── 연속 확장 모드: 첫 씬 이미지 1장만 ──
+    if(!Array.isArray(state.sceneImages) || state.sceneImages.length !== groupCount){
+      state.sceneImages = new Array(groupCount).fill(null).map((_, i)=> state.sceneImages?.[i] || null);
+    }
+    if(!state.sceneImages[0]?.url){
+      setStatus('auto-gen','loading','③ 연속 확장 모드 · 기준 씬 이미지 1장 생성 중...');
+      state.sceneImages[0] = await callHiggsfieldSceneImage(state.visualGroups[0], state.character);
+    }
+    state.done.images = true;
+    state.sceneFailures = [];
   }
 
   setStatus('auto-gen','loading', isT2v
     ? `③ T2V 클립 생성 중 (0/${groupCount}) · 씬당 ${perScene}초`
-    : `④ 영상 클립 생성 중 (0/${groupCount})...`);
+    : isChain
+      ? `④ 연속 확장 클립 생성 중 (0/${groupCount}) · 앞 클립 끝 프레임에서 이어감`
+      : `④ 영상 클립 생성 중 (0/${groupCount})...`);
   if(!Array.isArray(state.clips)) state.clips = [];
   if(state.clips.length !== groupCount){
     state.clips = new Array(groupCount).fill(null).map((_, i)=> state.clips[i] || null);
   }
   const sceneFailures = state.sceneFailures || [];
-  for(let i=0;i<groupCount;i++){
-    if(!isT2v && !state.sceneImages[i]?.url){
-      state.clips[i] = null;
-      continue;
+
+  if(isChain){
+    // ── 체인: 클립 N의 마지막 프레임 = 클립 N+1의 첫 프레임 ──
+    let anchorUrl = state.sceneImages[0].url;
+    for(let i=0;i<groupCount;i++){
+      if(state.clips[i]?.url){
+        setStatus('auto-gen','loading',`④ 클립 재사용 (${i+1}/${groupCount}) · 끝 프레임 추출...`);
+        if(i < groupCount - 1 && !state.sceneImages[i+1]?.url){
+          try{ anchorUrl = await lastFrameToHfUrl(state.clips[i].url); state.sceneImages[i+1] = { url: anchorUrl, group: state.visualGroups[i+1]?.group, chained:true }; }
+          catch(err){ console.warn('끝 프레임 추출 실패:', err?.message || err); }
+        }else if(state.sceneImages[i+1]?.url){
+          anchorUrl = state.sceneImages[i+1].url;
+        }
+        continue;
+      }
+      try{
+        const clip = await callHiggsfieldMotion({ url: anchorUrl }, state.visualGroups[i]);
+        state.clips[i] = clip;
+        if(i < groupCount - 1){
+          setStatus('auto-gen','loading',`④ 클립 ${i+1} 완료 · 끝 프레임 → 다음 씬 시작점 연결 중...`);
+          try{
+            anchorUrl = await lastFrameToHfUrl(clip.url);
+            state.sceneImages[i+1] = { url: anchorUrl, group: state.visualGroups[i+1]?.group, chained:true };
+          }catch(frameErr){
+            // 프레임 추출 실패 → 다음 씬은 새 이미지 생성으로 폴백 (이전 이미지 참조 유지)
+            console.warn('끝 프레임 추출 실패, 씬 이미지 생성으로 폴백:', frameErr?.message || frameErr);
+            const img = await callHiggsfieldSceneImage(state.visualGroups[i+1], state.character, { prevUrl: state.sceneImages[i]?.url || anchorUrl });
+            state.sceneImages[i+1] = img;
+            anchorUrl = img.url;
+          }
+        }
+      }catch(err){
+        console.warn('체인 클립 실패 (scene ' + (i+1) + '):', err?.message || err);
+        state.clips[i] = null;
+        sceneFailures.push({ index:i, kind:'clip', message:String(err?.message||err) });
+        // 체인이 끊겼으므로 다음 씬은 새 이미지에서 재시작
+        if(i < groupCount - 1 && !state.sceneImages[i+1]?.url){
+          try{
+            const img = await callHiggsfieldSceneImage(state.visualGroups[i+1], state.character, { prevUrl: anchorUrl });
+            state.sceneImages[i+1] = img;
+            anchorUrl = img.url;
+          }catch(imgErr){
+            console.warn('체인 재시작 이미지 실패:', imgErr?.message || imgErr);
+          }
+        }
+      }
+      setStatus('auto-gen','loading',`④ 연속 확장 클립 생성 중 (${i+1}/${groupCount})...`);
     }
-    if(state.clips[i]?.url){
-      setStatus('auto-gen','loading',`${isT2v?'③':'④'} 클립 재사용 (${i+1}/${groupCount})...`);
-      continue;
+  }else{
+    for(let i=0;i<groupCount;i++){
+      if(!isT2v && !state.sceneImages[i]?.url){
+        state.clips[i] = null;
+        continue;
+      }
+      if(state.clips[i]?.url){
+        setStatus('auto-gen','loading',`${isT2v?'③':'④'} 클립 재사용 (${i+1}/${groupCount})...`);
+        continue;
+      }
+      try{
+        const clip = isT2v
+          ? await callHiggsfieldTextToVideo(state.visualGroups[i], perScene)
+          : await callHiggsfieldMotion(state.sceneImages[i], state.visualGroups[i]);
+        state.clips[i] = clip;
+      }catch(err){
+        console.warn('클립 실패 (scene ' + (i+1) + '):', err?.message || err);
+        state.clips[i] = null;
+        sceneFailures.push({ index:i, kind:'clip', message:String(err?.message||err) });
+      }
+      setStatus('auto-gen','loading', isT2v
+        ? `③ T2V 클립 생성 중 (${i+1}/${groupCount})...`
+        : `④ 영상 클립 생성 중 (${i+1}/${groupCount})...`);
     }
-    try{
-      const clip = isT2v
-        ? await callHiggsfieldTextToVideo(state.visualGroups[i], perScene)
-        : await callHiggsfieldMotion(state.sceneImages[i], state.visualGroups[i]);
-      state.clips[i] = clip;
-    }catch(err){
-      console.warn('클립 실패 (scene ' + (i+1) + '):', err?.message || err);
-      state.clips[i] = null;
-      sceneFailures.push({ index:i, kind:'clip', message:String(err?.message||err) });
-    }
-    setStatus('auto-gen','loading', isT2v
-      ? `③ T2V 클립 생성 중 (${i+1}/${groupCount})...`
-      : `④ 영상 클립 생성 중 (${i+1}/${groupCount})...`);
   }
   const okClipCount = state.clips.filter(c=>c?.url).length;
   if(!okClipCount) throw new Error('모든 클립 생성이 실패했어요. Higgsfield 응답을 확인하세요.');
@@ -16284,6 +16367,63 @@ async function hfSubmit(applicationSlug, args, opts={}){
 }
 
 // base64 이미지를 힉스필드 스토리지에 업로드하고 공개 URL 반환 (2단계: presign → PUT)
+/**
+ * 클립 URL에서 마지막 프레임을 base64 PNG로 추출.
+ * 1차: <video> + canvas (빠름 · CORS 허용 시)
+ * 2차: ffmpeg.wasm (-sseof) 폴백
+ */
+async function extractLastFrameB64(videoUrl){
+  // 1차: canvas
+  try{
+    const b64 = await new Promise((resolve, reject)=>{
+      const v = document.createElement('video');
+      v.crossOrigin = 'anonymous';
+      v.muted = true;
+      v.playsInline = true;
+      v.preload = 'auto';
+      const bail = setTimeout(()=> reject(new Error('canvas 추출 타임아웃')), 20000);
+      v.onerror = ()=>{ clearTimeout(bail); reject(new Error('video load 실패')); };
+      v.onloadedmetadata = ()=>{
+        try{ v.currentTime = Math.max(0, (v.duration || 1) - 0.05); }
+        catch(err){ clearTimeout(bail); reject(err); }
+      };
+      v.onseeked = ()=>{
+        try{
+          const c = document.createElement('canvas');
+          c.width = v.videoWidth; c.height = v.videoHeight;
+          c.getContext('2d').drawImage(v, 0, 0);
+          const dataUrl = c.toDataURL('image/png'); // CORS 미허용이면 여기서 throw
+          clearTimeout(bail);
+          resolve(dataUrl.split(',')[1]);
+        }catch(err){ clearTimeout(bail); reject(err); }
+      };
+      v.src = videoUrl;
+    });
+    if(b64) return b64;
+  }catch(err){
+    console.warn('canvas 프레임 추출 실패 → ffmpeg 폴백:', err?.message || err);
+  }
+  // 2차: ffmpeg.wasm
+  const ffmpeg = await getFFmpeg(()=>{});
+  await ffmpeg.writeFile('chain_in.mp4', await FFmpegUtil.fetchFile(videoUrl));
+  await ffmpeg.exec(['-sseof','-0.2','-i','chain_in.mp4','-frames:v','1','-q:v','2','chain_last.png']);
+  const data = await ffmpeg.readFile('chain_last.png');
+  try{ await ffmpeg.deleteFile('chain_in.mp4'); await ffmpeg.deleteFile('chain_last.png'); }catch(_){}
+  let bin = '';
+  const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
+  const CHUNK = 0x8000;
+  for(let i=0;i<bytes.length;i+=CHUNK){
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i+CHUNK));
+  }
+  return btoa(bin);
+}
+
+/** 클립 마지막 프레임 → HF 업로드 → https URL (다음 클립의 first_frame 용) */
+async function lastFrameToHfUrl(videoUrl){
+  const b64 = await extractLastFrameB64(videoUrl);
+  return await hfUploadBase64(b64, 'image/png');
+}
+
 async function hfUploadBase64(b64, mime){
   const { res: presignRes, via } = await hfFetch('files/generate-upload-url', {
     method:'POST',
@@ -17526,9 +17666,10 @@ function buildHfImageArgs(prompt, { refs = [] } = {}){
   return { model, args };
 }
 
-async function callHiggsfieldSceneImage(group, character){
+async function callHiggsfieldSceneImage(group, character, opts={}){
   collectWorldAssetsFromUI();
   const refUrls = await getUploadedProductImageUrls();
+  const prevSceneUrl = opts.prevUrl && /^https?:\/\//i.test(opts.prevUrl) ? opts.prevUrl : null;
   const isStory = (state.scriptMode==='story') && state.selectedStoryPlan!=null;
   const styleNote = (isStory || state.visualStyle==='narrative')
     ? '이야기 흐름에 맞는 자연스러운 연출, 장면의 감정과 상황이 잘 드러나는 구도, 세로 숏폼 풀샷/미디엄'
@@ -17562,6 +17703,11 @@ async function callHiggsfieldSceneImage(group, character){
   const heroContinuityLine = state.heroType === 'animal'
     ? '입력 참고 이미지의 동물 개체(종·품종·색·무늬)를 그대로 유지하고 장면마다 다른 개체·다른 종으로 바꾸지 말 것. 사람 얼굴은 프레임 안에 포함하지 말 것.'
     : '입력 참고 이미지의 인물 얼굴·헤어·복장을 그대로 유지하고 장면마다 다른 사람으로 바꾸지 말 것.';
+  // 화풍 잠금 — 씬마다 실사/3D/애니로 튀지 않도록 명시적으로 고정
+  const styleLockLine = '화풍 잠금: 이 영상의 모든 씬은 「' + (ART_STYLES[state.artStyle]?.label || state.artStyle || 'cinematic') + '」 한 가지 화풍으로만 그린다. 실사↔3D 카툰↔애니메이션 간 전환 절대 금지. 조명 톤, 색감, 렌더링 질감을 이전 씬과 동일하게 유지.';
+  const prevSceneLine = prevSceneUrl
+    ? '마지막 참고 이미지는 직전 씬의 실제 프레임이다. 같은 공간·같은 조명·같은 인물(개체)·같은 소품 상태에서 이어지는 다음 순간을 그릴 것.'
+    : '';
   const prompt = isStory
     ? [
         '세로형 미니 영화 장면 스틸컷.',
@@ -17570,7 +17716,9 @@ async function callHiggsfieldSceneImage(group, character){
         styleNote,
         shotNote,
         '아트 스타일: ' + artNote,
+        styleLockLine,
         heroContinuityLine,
+        prevSceneLine,
         assetNote ? assetNote + '.' : '',
         propFidelityNote ? propFidelityNote + '.' : '',
         '화면에 텍스트·자막·워터마크·로고 삽입 금지.',
@@ -17580,9 +17728,9 @@ async function callHiggsfieldSceneImage(group, character){
     : (function(){
         const userBrief = originalUserBriefExcerpt();
         const briefLine = userBrief ? '원본 사용자 입력: ' + userBrief + '. ' : '';
-        return '세로 숏폼 영화형 제품 장면 스틸컷. 제품이 사건을 만들거나 해결하는 실제 장면이어야 한다. ' + cinematicReelGrammarPrompt() + ' ' + briefLine + group.visual + '. ' + styleNote + (shotNote?'. '+shotNote:'') + '. 아트 스타일: ' + artNote + '. ' + heroContinuityLine + ' ' + (assetNote?assetNote+'. ':'') + '화면에 텍스트·자막·워터마크·로고 삽입 금지. 빠른 컷 편집용 명확한 한 장면.';
+        return '세로 숏폼 영화형 제품 장면 스틸컷. 제품이 사건을 만들거나 해결하는 실제 장면이어야 한다. ' + cinematicReelGrammarPrompt() + ' ' + briefLine + group.visual + '. ' + styleNote + (shotNote?'. '+shotNote:'') + '. 아트 스타일: ' + artNote + '. ' + styleLockLine + ' ' + heroContinuityLine + ' ' + (prevSceneLine?prevSceneLine+' ':'') + (assetNote?assetNote+'. ':'') + '화면에 텍스트·자막·워터마크·로고 삽입 금지. 빠른 컷 편집용 명확한 한 장면.';
       })();
-  const refs = getConsistencyRefUrls({ extra: [...(refUrls||[]), character?.imageUrl].filter(Boolean), includeHeldProps:true, propFirst:true, max:4 });
+  const refs = getConsistencyRefUrls({ extra: [...(refUrls||[]), character?.imageUrl, prevSceneUrl].filter(Boolean), includeHeldProps:true, propFirst:true, max:4 });
   const { model, args } = buildHfImageArgs(prompt, { refs });
   const output = await hfSubmit(model, args, { fallbackModels: HF_IMAGE_MODEL_FALLBACKS });
   if(model && state.keys.hfImageModel !== model){
@@ -17622,7 +17770,7 @@ async function callHiggsfieldMotion(sceneImage, group){
             '대사 없이도 효과음 타점과 BGM 박자에 맞춰 시작-긴장-임팩트-여운이 느껴지게 움직여줘.',
             '1~2초 안에 푸시인/패닝/틸트/시선 이동/순간 정지 후 히트 중 하나를 명확히 사용.',
             '2초 이상 정지 화면 금지. 인물 얼굴, 복장, 핵심 소품, 배경 연속성 유지.',
-            '원본 이미지의 아트 스타일(' + artNote + ')을 유지하고 다른 화풍으로 바꾸지 말 것.',
+            '원본 이미지의 아트 스타일(' + artNote + ')을 유지하고 다른 화풍으로 바꾸지 말 것. 실사↔3D 카툰↔애니메이션 전환 절대 금지.',
             '화면에 텍스트·자막·워터마크 생성 금지.'
           ].filter(Boolean).join(' ')
         : '이 이미지의 실제 내용(' + group.visual + ')에 맞는 영화형 릴스 카메라 워크로 움직여줘. 제품/소품이 사건의 원인이나 해결처럼 보이게 한다. ' + cinematicReelGrammarPrompt() + ' 대사 맥락: "' + group.lines + '". ' + (assetNote?assetNote+'. ':'') + (propFidelityNote?propFidelityNote+'. ':'') + '1~2초 단위로 리듬감 있게 변화(줌인/패닝/앵글전환 교차), 2초 이상 정지 화면 금지. 원본 이미지의 아트 스타일(' + artNote + ')을 그대로 유지하고 다른 화풍으로 바뀌지 않게 해줘. 화면에 텍스트·자막·워터마크 생성 금지.')
