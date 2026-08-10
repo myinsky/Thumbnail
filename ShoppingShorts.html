@@ -1864,6 +1864,8 @@ let state = {
   visualStyle: null, // 'usage' | 'presentation'
   artStyle: 'cinematic', // 캐릭터·씬·영상에 공통 적용되는 아트 스타일
   charGender: 'auto',
+  heroType: 'human',          // 'human' | 'animal' — 주인공 유형 (동물이면 반려동물·야생 등)
+  heroAnimalSpecies: '',      // 동물 주인공일 때 종/견종/특징
   castCount: 2,               // 주목 등장인물 수 (주인공 포함, 군중 제외 · 기본 2)
   drawHero: true,             // 주인공 이미지 생성 여부
   heroSource: 'ai',           // 주인공: ai | upload
@@ -4982,6 +4984,21 @@ function productAutoKickoffHtml(){
           <div class="settings-note" style="margin-top:8px;">이미지를 등록하면 제품의 형태·크기·색상을 고정하고, 이미지가 없으면 입력 스토리를 우선합니다.</div>
         </div>
       </div>
+      <div style="margin-top:14px; padding:10px 12px; border:1.5px dashed #C7D7F5; border-radius:10px; background:#F7FAFF;">
+        <label style="display:flex; align-items:center; gap:8px; font-size:13.5px; font-weight:700; cursor:pointer;">
+          <input type="checkbox" id="animalHeroPresetCheck" ${state.heroType==='animal'?'checked':''}>
+          🐾 동물이 이 상품을 사용/반응하는 에피소드로 만들기
+        </label>
+        ${state.heroType==='animal' ? `
+          <div class="field" style="margin:8px 0 0;">
+            <label style="font-size:12px;">동물 종류 / 견종·묘종 · 색·특징</label>
+            <input type="text" id="heroAnimalSpeciesInline" value="${escHtml(state.heroAnimalSpecies||'')}" placeholder="예: 삼색 코숏 고양이, 4개월, 호기심 많음">
+          </div>
+          <div class="settings-note" style="margin-top:6px; font-size:12px;">동물이 주인공이 되고, 등록한 상품이 사건의 도구·원인·해결로 씬마다 실제 물체로 등장합니다.</div>
+        ` : `
+          <div class="settings-note" style="margin-top:4px; font-size:12px;">체크하면 사람 대신 동물이 주인공이 되고, 캐릭터·씬 프롬프트가 동물 모드로 전환됩니다.</div>
+        `}
+      </div>
       <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;">
         <button class="btn" id="productAutoBtn" type="button" ${brief.trim()?'':'disabled'}>🚀 제품 스토리로 바로 자동 영상 만들기</button>
         <button class="btn secondary" id="productPrepBtn" type="button" ${brief.trim()?'':'disabled'}>스토리/이미지 분석만 먼저</button>
@@ -5182,6 +5199,21 @@ function renderCharacter(){
             <input type="number" id="castCountInput" min="1" max="5" step="1" value="${castCount}">
           </div>
           <div class="field" style="margin:0;">
+            <label>주인공 유형</label>
+            <select id="heroType">
+              <option value="human" ${(state.heroType||'human')==='human'?'selected':''}>사람</option>
+              <option value="animal" ${state.heroType==='animal'?'selected':''}>동물 (강아지·고양이 등)</option>
+            </select>
+          </div>
+        </div>
+
+        ${state.heroType==='animal' ? `
+          <div class="field" style="margin-top:10px;">
+            <label>동물 종류 / 견종·묘종 · 색·특징</label>
+            <input type="text" id="heroAnimalSpecies" value="${escHtml(state.heroAnimalSpecies||'')}" placeholder="예: 골든리트리버, 크림색 장모, 활발한 8개월 강아지">
+          </div>
+        ` : `
+          <div class="field" style="margin-top:10px;">
             <label>주인공 성별</label>
             <select id="charGender">
               <option value="auto" ${state.charGender==='auto'?'selected':''}>자동 (대본 분석)</option>
@@ -5189,7 +5221,7 @@ function renderCharacter(){
               <option value="male" ${state.charGender==='male'?'selected':''}>남성</option>
             </select>
           </div>
-        </div>
+        `}
 
         <button class="btn" id="castAutoAllBtn" type="button" style="width:100%; padding:14px 16px; font-size:15px; font-weight:800;">
           ${primaryLabel}
@@ -5570,11 +5602,19 @@ function buildCharacterBible(){
 
 function buildCharacterBiblePrompt(){
   const bible = buildCharacterBible();
+  const isAnimalHero = state.heroType === 'animal';
   const lines = bible.all.map((p,i)=>{
+    if(i === 0 && isAnimalHero){
+      const species = compactStoryText(state.heroAnimalSpecies || p.look || '동물 주인공');
+      return String(i+1) + ') 《' + (p.name || '동물 주인공') + '》 (종·품종·색·크기·무늬 고정: ' + species + '). 전 씬에서 동일 개체 유지. 다른 견종·묘종·색 동물로 바뀌면 안 됨. 사람 얼굴은 프레임 안에 포함하지 말 것.';
+    }
     const g = genderLabelKo(p.gender==='neutral'?'auto':p.gender);
     return String(i+1) + ') ' + formatPersonIdentity(p) + ' (역할:' + (p.role||'인물') + ', 성별:' + g + '). 전 장면에서 얼굴·헤어·나이·복장을 이 고정값과 참고 이미지와 동일하게 유지. 소품·제품·차량을 얼굴/복장으로 합성하지 말 것.';
   });
-  return '캐릭터 얼굴·복장 바이블:\n' + lines.join('\n') + '\n인물 초상은 얼굴·헤어·복장만 고정한다. TV·박스·차량·제품·가격표·영수증·빵·커피는 sceneProps/props로만 처리하고 인물 초상에 넣지 않는다.';
+  const tail = isAnimalHero
+    ? '\n동물 주인공은 종·품종·색·무늬로 개체를 고정하고, 참고 이미지의 동일 개체를 유지한다. 상품·소품은 실제 물체로만 등장.'
+    : '\n인물 초상은 얼굴·헤어·복장만 고정한다. TV·박스·차량·제품·가격표·영수증·빵·커피는 sceneProps/props로만 처리하고 인물 초상에 넣지 않는다.';
+  return '캐릭터 바이블:\n' + lines.join('\n') + tail;
 }
 
 function resolvePropHolder(prop){
@@ -11422,6 +11462,20 @@ document.addEventListener('change', (e)=>{
     ensureSourceHunt().keyword = e.target.value.trim();
     return;
   }
+  if(e.target.id === 'heroType'){
+    state.heroType = e.target.value === 'animal' ? 'animal' : 'human';
+    render();
+    return;
+  }
+  if(e.target.id === 'heroAnimalSpecies' || e.target.id === 'heroAnimalSpeciesInline'){
+    state.heroAnimalSpecies = e.target.value;
+    return;
+  }
+  if(e.target.id === 'animalHeroPresetCheck'){
+    state.heroType = e.target.checked ? 'animal' : 'human';
+    render();
+    return;
+  }
   if(e.target.id === 'ytMaterialKw'){
     ensureYtMaterial().keyword = e.target.value.trim();
     return;
@@ -14244,17 +14298,24 @@ function storyPlanMetaHtml(plan){
 function heroSuggestionFromStoryPlan(plan){
   if(!plan) return null;
   const protagonist = compactStoryText(plan.protagonist || '');
-  const look = compactStoryText(plan.protagonistLook || plan.visualContinuity || protagonist);
-  const wardrobe = compactStoryText(plan.protagonistWardrobe || plan.wardrobe || plan.visualContinuity);
+  const isAnimalHero = state.heroType === 'animal';
+  const species = compactStoryText(state.heroAnimalSpecies || '');
+  const look = isAnimalHero
+    ? compactStoryText([species, plan.visualContinuity, protagonist].filter(Boolean).join(' · '))
+    : compactStoryText(plan.protagonistLook || plan.visualContinuity || protagonist);
+  const wardrobe = isAnimalHero ? '' : compactStoryText(plan.protagonistWardrobe || plan.wardrobe || plan.visualContinuity);
   const desire = compactStoryText(plan.protagonistDesire || plan.desire || plan.logline);
   const conflict = compactStoryText(plan.centralConflict || plan.conflict);
   const arc = compactStoryText(plan.arc || plan.twistOrPayoff);
   const vibe = compactStoryText(plan.tone || plan.genre);
+  const labelBase = isAnimalHero
+    ? (species.split(/[,·]/)[0] || protagonist.split(/[,·—-]/)[0] || '동물 주인공')
+    : (plan.protagonistName || protagonist.split(/[,·—-]/)[0] || '주인공');
   return sanitizeCharacterSuggestion({
     id: 'hero',
-    label: compactStoryText(plan.protagonistName || (protagonist.split(/[,·—-]/)[0] || '주인공').slice(0, 30)) || '주인공',
+    label: compactStoryText(labelBase).slice(0, 30) || (isAnimalHero ? '동물 주인공' : '주인공'),
     gender: 'neutral',
-    roleInStory: compactStoryText(plan.protagonistRole || protagonist || '주인공'),
+    roleInStory: compactStoryText(plan.protagonistRole || protagonist || (isAnimalHero ? '동물 주인공' : '주인공')),
     desire,
     conflict,
     arc,
@@ -14263,6 +14324,7 @@ function heroSuggestionFromStoryPlan(plan){
     identityLock: look,
     wardrobe,
     signatureProp: '',
+    species: isAnimalHero ? species : undefined,
   });
 }
 
@@ -14313,6 +14375,25 @@ const STORY_PLAN_VARIANTS = [
 
 async function callGeminiStoryPlanOne(idea, variantIdx){
   const variant = STORY_PLAN_VARIANTS[variantIdx] || STORY_PLAN_VARIANTS[0];
+  const isAnimalHero = state.heroType === 'animal';
+  const species = compactStoryText(state.heroAnimalSpecies || '');
+  const productBrief = compactStoryText(state.productDescription || '');
+  const productSlot = productBrief ? [
+    '',
+    '이 이야기에는 등록된 상품이 등장한다:',
+    productBrief,
+    '- 상품은 사건의 도구/원인/해결로 씬 안에서 실제 물체로 등장해야 하고, 광고 컷·포스터 이미지로 축소하지 말 것.',
+    '- 상품의 실제 형태·크기·색상·비율을 유지하고, 캐릭터/동물의 몸에 합성하지 말 것.'
+  ].join('\n') : '';
+  const animalSlot = isAnimalHero ? [
+    '',
+    '주인공은 동물이다 (사람이 아님):',
+    species ? '- 개체 특징: ' + species : '- 종·품종·색·특징이 명시되지 않았다면 스토리 맥락에 맞춰 하나로 고정한다.',
+    '- 모든 씬에서 동일 개체를 유지한다. 종·품종·색·크기·무늬가 씬마다 바뀌면 안 된다.',
+    '- 주인공의 대사는 없다. 표정, 몸짓, 꼬리·귀·눈 움직임으로 이야기를 전개한다.',
+    '- 사람은 손·발·실루엣 등 부분적으로만 등장하고 얼굴은 화면 밖으로 둔다.',
+    '- protagonist 필드에는 동물 개체의 특징을 쓰고, 사람 인적 사항(성별/나이/직업)은 쓰지 않는다.'
+  ].join('\n') : '';
   const system = [
     '당신은 대사가 거의 없는 숏폼 미니 영화의 스토리보드 감독이자 사운드 디자이너다.',
     '핵심은 대사가 아니라 장면, 효과음, 배경음악 리듬, 빠른 전개, 놀라운 비주얼 임팩트의 조화다.',
@@ -14324,6 +14405,8 @@ async function callGeminiStoryPlanOne(idea, variantIdx){
   const prompt = [
     '사용자 줄거리 또는 아이디어:',
     idea,
+    productSlot,
+    animalSlot,
     '',
     '위 아이디어를 15~30초 세로형 미니 영화 「' + variant.label + '」 방향으로 완성해줘.',
     '방향성: ' + variant.desc,
@@ -15831,6 +15914,27 @@ function buildCharacterPortraitPrompt(person, opts={}){
   const ctx = opts.ctx || null;
   const role = cleanRoleIntentText(person.roleInStory || person.role || (opts.kind === 'hero' ? '주인공' : '조연'), 120);
   const label = cleanCastText(person.label || person.name || role || '인물', 60);
+
+  const isAnimalHero = (opts.kind === 'hero') && state.heroType === 'animal';
+  if(isAnimalHero){
+    const species = compactStoryText(state.heroAnimalSpecies || person.species || person.look || '');
+    const brief = opts.storyBrief || buildDirectorCastingBrief(ctx);
+    const vibe = cleanRoleIntentText(person.vibe || person.arc || '', 120);
+    return [
+      '숏폼 미니영화용 동물 주인공 기준 이미지.',
+      '전신 또는 상체 중심, 자연스러운 자세로 카메라를 응시하거나 살짝 옆을 본다. 배경은 단순한 스튜디오/야외 자연광.',
+      '이 개체는 이후 모든 씬에서 동일 개체로 유지되어야 한다: 종·품종·크기·색상·무늬·귀 모양·꼬리 모양이 씬마다 바뀌면 안 된다.',
+      species ? '개체 특징 고정: ' + species + '.' : '개체 특징 고정 값이 필요합니다.',
+      brief ? '스토리 맥락: ' + brief : '',
+      vibe ? '성격/연기 방향: ' + vibe + '.' : '',
+      '옷·모자·안경 등 인공 의상은 스토리에 필요할 때만. 기본은 자연스러운 반려동물 모습.',
+      '사람의 얼굴은 함께 보이지 않게 하고, 다른 종 동물이 섞이지 않게 한다.',
+      opts.artNote ? '아트 스타일: ' + opts.artNote + '.' : '',
+      '화면에 텍스트·로고·워터마크·가격표·상품 패키지 삽입 금지.',
+      '이 이미지는 이후 모든 씬의 동일 개체 기준 이미지다.'
+    ].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+  }
+
   const gender = person.gender || opts.resolvedGender || 'auto';
   const look = stripStoryPropsFromPersonText(person.identityLock || person.look || '', 170) || castFallbackLook(gender);
   const wardrobe = stripStoryPropsFromPersonText(person.wardrobe || '', 120) || '전 장면에서 유지되는 단정하고 기억하기 쉬운 복장';
@@ -16784,13 +16888,15 @@ async function generateAutoSfxForScript(){
 async function callHiggsfieldCharacter(gender){
   collectWorldAssetsFromUI();
   const artNote = ART_STYLES[state.artStyle]?.prompt || ART_STYLES.cinematic.prompt;
-  const resolved = await resolveCharGenderForPrompt(gender || state.charGender || 'auto');
+  const isAnimalHero = state.heroType === 'animal';
+  const resolved = isAnimalHero ? 'neutral' : await resolveCharGenderForPrompt(gender || state.charGender || 'auto');
   const sug = sanitizeCharacterSuggestion(state.selectedCharSuggestion || {
     id: 'hero',
-    label: '주인공',
-    gender: resolved === 'female' || resolved === 'male' ? resolved : 'neutral',
+    label: isAnimalHero ? (state.heroAnimalSpecies?.split(/[,·]/)[0] || '동물 주인공').slice(0,30) : '주인공',
+    gender: isAnimalHero ? 'neutral' : (resolved === 'female' || resolved === 'male' ? resolved : 'neutral'),
   });
-  if(resolved === 'female' || resolved === 'male') sug.gender = resolved;
+  if(!isAnimalHero && (resolved === 'female' || resolved === 'male')) sug.gender = resolved;
+  if(isAnimalHero) sug.species = state.heroAnimalSpecies || sug.species || '';
   state.selectedCharSuggestion = sug;
   const prompt = buildCharacterPortraitPrompt(sug, {
     kind: 'hero',
@@ -16872,6 +16978,9 @@ async function callHiggsfieldSceneImage(group, character){
         '추상적인 상징 이미지, 포스터, 분할 콜라주, 무관한 배경, 새 인물 생성 금지'
       ], '. ')
     : '';
+  const heroContinuityLine = state.heroType === 'animal'
+    ? '입력 참고 이미지의 동물 개체(종·품종·색·무늬)를 그대로 유지하고 장면마다 다른 개체·다른 종으로 바꾸지 말 것. 사람 얼굴은 프레임 안에 포함하지 말 것.'
+    : '입력 참고 이미지의 인물 얼굴·헤어·복장을 그대로 유지하고 장면마다 다른 사람으로 바꾸지 말 것.';
   const prompt = isStory
     ? [
         '세로형 미니 영화 장면 스틸컷.',
@@ -16880,7 +16989,7 @@ async function callHiggsfieldSceneImage(group, character){
         styleNote,
         shotNote,
         '아트 스타일: ' + artNote,
-        '입력 참고 이미지의 인물 얼굴·헤어·복장을 그대로 유지하고 장면마다 다른 사람으로 바꾸지 말 것.',
+        heroContinuityLine,
         assetNote ? assetNote + '.' : '',
         propFidelityNote ? propFidelityNote + '.' : '',
         '화면에 텍스트·자막·워터마크·로고 삽입 금지.',
@@ -16890,7 +16999,7 @@ async function callHiggsfieldSceneImage(group, character){
     : (function(){
         const userBrief = originalUserBriefExcerpt();
         const briefLine = userBrief ? '원본 사용자 입력: ' + userBrief + '. ' : '';
-        return '세로 숏폼 영화형 제품 장면 스틸컷. 제품이 사건을 만들거나 해결하는 실제 장면이어야 한다. ' + cinematicReelGrammarPrompt() + ' ' + briefLine + group.visual + '. ' + styleNote + (shotNote?'. '+shotNote:'') + '. 아트 스타일: ' + artNote + '. 입력 참고 이미지의 인물 얼굴·헤어·복장을 그대로 유지(장면마다 다른 사람으로 바꾸지 말 것). ' + (assetNote?assetNote+'. ':'') + '화면에 텍스트·자막·워터마크·로고 삽입 금지. 빠른 컷 편집용 명확한 한 장면.';
+        return '세로 숏폼 영화형 제품 장면 스틸컷. 제품이 사건을 만들거나 해결하는 실제 장면이어야 한다. ' + cinematicReelGrammarPrompt() + ' ' + briefLine + group.visual + '. ' + styleNote + (shotNote?'. '+shotNote:'') + '. 아트 스타일: ' + artNote + '. ' + heroContinuityLine + ' ' + (assetNote?assetNote+'. ':'') + '화면에 텍스트·자막·워터마크·로고 삽입 금지. 빠른 컷 편집용 명확한 한 장면.';
       })();
   const refs = getConsistencyRefUrls({ extra: [...(refUrls||[]), character?.imageUrl].filter(Boolean), includeHeldProps:true, propFirst:true, max:4 });
   const { model, args } = buildHfImageArgs(prompt, { refs });
