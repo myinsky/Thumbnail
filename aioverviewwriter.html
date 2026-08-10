@@ -17770,14 +17770,29 @@ ${toolTitleCoreRulesPrompt(y)}
     if (state.sourceText) lines.push(`수집 자료 요약 기준: ${compactSourceTextForPrompt(state.sourceText, 1800)}`);
     const naverCtx = naverKeywordContextForPrompt(1600);
     if (naverCtx) lines.push(naverCtx);
-    const organic = ((state.searchData && state.searchData.organic) || []).slice(0, 5);
-    if (organic.length) {
-      lines.push(`검색 상위 5개 분석 (제목 패턴·검색 의도 참고용. 숫자는 아래 금액 대장으로 반드시 교차검증):`);
-      organic.forEach((o, i) => {
-        const tier = isFactSourceCandidate(o && o.link) ? trustTierLabel(o.link) : "일반(수치 근거 불가)";
-        lines.push(`${i + 1}. [${tier}] ${o.title || ""}`);
-        if (o.snippet) lines.push(`   스니펫: ${String(o.snippet).replace(/\s+/g, " ").slice(0, 170)}`);
-      });
+    // 검색어 기반 유형(통합/AI브리핑/홈판 하이브리드/블로그+쇼핑커넥트)이면 상위 10개 제목 분석 블록을 사용
+    // 훅형(방송/연예 홈판 · 도메인 미선택 기본 홈판)·카페는 상위글 분석보다 최신 이슈·인물·생활 훅이 우선이라 스킵
+    const useTopTitlesAnalysis = (() => {
+      if (catKey === "cafe") return false;
+      const style = state && state._titleGenStyle;
+      const isTrendTitle = style === "trend" || (!style && catKey === "trend");
+      if (isTrendTitle && typeof useHomeFeedHookTitleMode === "function" && useHomeFeedHookTitleMode()) return false;
+      return true;
+    })();
+    if (useTopTitlesAnalysis) {
+      const topBlock = topSearchTitlesAnalysisBlock(10);
+      if (topBlock) lines.push(topBlock);
+    } else {
+      // 훅형·카페는 기존 방식 유지(참고용 5개 나열, 분석 지시 없음)
+      const organic = ((state.searchData && state.searchData.organic) || []).slice(0, 5);
+      if (organic.length) {
+        lines.push(`검색 상위 5개 참고 (제목 그대로 복제 금지, 숫자는 아래 금액 대장으로 교차검증):`);
+        organic.forEach((o, i) => {
+          const tier = isFactSourceCandidate(o && o.link) ? trustTierLabel(o.link) : "일반(수치 근거 불가)";
+          lines.push(`${i + 1}. [${tier}] ${o.title || ""}`);
+          if (o.snippet) lines.push(`   스니펫: ${String(o.snippet).replace(/\s+/g, " ").slice(0, 170)}`);
+        });
+      }
     }
     const amountBlock = amountEvidencePromptBlock();
     if (amountBlock) lines.push(amountBlock);
@@ -20477,6 +20492,38 @@ function referenceImageQueries(result) {
       lines.push("이 숫자는 제목·본문·이미지 문구에 쓰지 마라. 신뢰 출처에서 같은 숫자를 확인했을 때만 쓴다. 상위 글마다 금액이 다르면 공식 출처 숫자를 채택하고, 왜 다른 금액이 떠도는지 본문에서 한 문장으로 정리하라.");
     }
     lines.push("", "[숫자 일관성 규칙] 제목(titles)에 넣은 금액은 html_content 본문에도 똑같은 숫자로 반드시 등장해야 한다. 제목과 본문의 금액이 다르면 실패다. 대표이미지 문구도 선택한 제목과 같은 숫자를 쓴다.");
+    return lines.join("\n");
+  }
+  // 검색어 기반 제목 생성 시 네이버 상위 N개 제목을 분석해 프롬프트에 주입한다.
+  // 훅형(방송/연예) · 카페 등 검색어 기반이 아닌 경로에서는 호출하지 않는다.
+  function topSearchTitlesAnalysisBlock(count) {
+    const limit = Math.max(3, Math.min(10, Number(count) || 10));
+    const organic = ((state && state.searchData && state.searchData.organic) || []).slice(0, limit);
+    if (!organic || organic.length < 3) return "";
+    const lines = [];
+    lines.push("");
+    lines.push(`[★★ 네이버 검색 상위 ${organic.length}개 제목 분석 — 필수 반영]`);
+    lines.push("아래는 이번 키워드로 네이버에서 지금 상위 노출 중인 실제 블로그·웹문서 제목이다. 제목 패턴·각도·정보 공백을 먼저 분석한 뒤에 10개 슬롯을 생성한다.");
+    lines.push("");
+    organic.forEach((o, i) => {
+      const trusted = typeof isFactSourceCandidate === "function" && isFactSourceCandidate(o && o.link);
+      const tier = trusted && typeof trustTierLabel === "function" ? trustTierLabel(o.link) : "일반";
+      lines.push(`${i + 1}. [${tier}] ${String(o.title || "").trim()}`);
+      if (o.snippet) lines.push(`   요약: ${String(o.snippet).replace(/\s+/g, " ").slice(0, 130)}`);
+    });
+    lines.push("");
+    lines.push("[사전 분석 지시 — 제목 생성 전에 머릿속으로 반드시 수행]");
+    lines.push(`1) 공통 패턴 3~4개: 위 ${organic.length}개 제목에 반복되는 문장 뼈대(예: "연도 + 메인키워드 + 총정리", "조건 및 방법", "대상별 지급액", "신청 방법과 서류")를 뽑는다.`);
+    lines.push("2) 대표 각도 3~4개: 상위 글들이 실제로 다루는 정보 각도(예: 자격 요건, 신청 방법, 금액 계산 예시, 반려 사유)를 요약한다.");
+    lines.push("3) 정보 공백·틈새 각도 2~3개: 상위 글들이 놓친 세부 상황·후속 단계·오해 지점(예: 이의신청 기한, 반기 vs 정기 차이, 신청 후 조회 방법, 지급 지연 시 대처)을 찾는다.");
+    lines.push("");
+    lines.push("[제목 생성 규칙 — 위 분석을 반드시 반영]");
+    lines.push("- 상위 글 제목 문구를 그대로 복제하거나 단어 순서만 살짝 바꾸는 방식 금지. 각도가 겹치더라도 표현·구조를 새로 짠다.");
+    lines.push(`- 10개 슬롯 중 최소 3개는 위 (3) 정보 공백·틈새 각도를 공략한다(review, tip, howto 슬롯에 우선 배치 권장).`);
+    lines.push("- 상위 글의 대표 각도(2) 3~4개도 각각 최소 1개 이상 커버해 검색 유입을 놓치지 않는다(large, small1, small3, medium 슬롯에 우선 배치 권장).");
+    lines.push("- 상위 글에 노출된 금액·수치는 그대로 옮기지 마라(위 [금액·수치 교차검증 대장] 규칙이 우선).");
+    lines.push("- 상위 글이 모두 특정 연도를 붙였더라도 [연도 규칙]에 어긋나면 연도를 빼거나 최신 연도로 바꾼다.");
+    lines.push("- 상위 글에 특수문자(【】·★·◆)·이모지가 있어도 절대 따라 하지 마라.");
     return lines.join("\n");
   }
   function policyChangeEvidencePromptBlock() {
