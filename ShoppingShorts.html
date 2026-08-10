@@ -4394,13 +4394,10 @@ function syncHuntKeywordFromInputs(){
 function selectedHuntPlatformIds(){
   const hunt = ensureSourceHunt();
   const en = hunt.enabled || {};
-  if(hunt.track === 'pet'){
-    return ['youtube','tiktok','douyin','xhs'].filter(id => en[id]);
-  }
-  // 상품 트랙: 유튜브 포함 (Step 3 흡수)
-  const ids = ['youtube','coupang','tiktok','douyin','xhs'].filter(id => en[id]);
+  // 영상 소재는 유튜브·틱톡(+고급: 도우인·샤오홍슈)에서만. 쿠팡은 상품 확인 단계로 분리.
+  const ids = ['youtube','tiktok','douyin','xhs'].filter(id => en[id]);
   if(hunt.track === 'celeb'){
-    return ids.filter(id => id === 'tiktok' || id === 'coupang');
+    return ids.filter(id => id === 'tiktok');
   }
   return ids;
 }
@@ -4487,21 +4484,30 @@ async function runHuntSelectedPlatforms(){
         notes.push('쿠팡 탭');
       }
     } else if(id === 'tiktok'){
-      state.tiktokQuery = kw;
-      if(state.keys.apifyToken && kw){
+      // 외국어 소재 모드: 한국어 키워드를 중국어로 변환해 검색하고, 결과에서 한국어 제목 제외
+      const foreignOnly = hunt.track !== 'pet' && hunt.tiktokForeignOnly !== false;
+      let tkKw = kw;
+      if(foreignOnly && looksHangul(tkKw)){
+        tkKw = translateHuntKwToZh(tkKw) || tkKw;
+      }
+      state.tiktokQuery = tkKw;
+      if(state.keys.apifyToken && tkKw){
         try{
-          const items = await apifyTiktokSearch(kw, hunt.limit);
-          const ranked = rankShortsCandidates(items, 'tiktok').slice(0, hunt.limit);
+          const items = await apifyTiktokSearch(tkKw, hunt.limit);
+          const filtered = foreignOnly
+            ? items.filter(v => !/[가-힣]/.test(String(v.title || v.desc || '') + String(v.channel || v.author || '')))
+            : items;
+          const ranked = rankShortsCandidates(filtered, 'tiktok').slice(0, hunt.limit);
           state.apifyResults = ranked;
           shortsPool.push(...ranked);
-          notes.push(`틱톡 ${ranked.length}개`);
+          notes.push(foreignOnly ? `틱톡(외국어) ${ranked.length}개` : `틱톡 ${ranked.length}개`);
         }catch(_){
-          window.open(platformHuntSearchUrl('tiktok', kw || 'fyp'), '_blank');
+          window.open(platformHuntSearchUrl('tiktok', tkKw || 'fyp'), '_blank');
           opened++;
           notes.push('틱톡 탭');
         }
       } else {
-        window.open(platformHuntSearchUrl('tiktok', kw || 'fyp'), '_blank');
+        window.open(platformHuntSearchUrl('tiktok', tkKw || 'fyp'), '_blank');
         opened++;
         notes.push('틱톡 탭');
       }
@@ -4881,16 +4887,11 @@ function renderAnalysis(){
   const EXTRA_PERIODS = HUNT_PERIODS.filter(p => !['24h','7d','30d','365d'].includes(p.id));
 
   const isPet = hunt.track === 'pet';
-  const corePlatforms = isPet
-    ? [
-        {id:'youtube', label:'▶ 유튜브', sub:'실사 쇼츠'},
-        {id:'tiktok', label:'🎵 틱톡', sub:'검토'},
-      ]
-    : [
-        {id:'youtube', label:'▶ 유튜브', sub:'쇼츠·리뷰'},
-        {id:'tiktok', label:'🎵 틱톡', sub:'검토'},
-        {id:'coupang', label:'🛒 쿠팡', sub:'상품 매칭'},
-      ];
+  // 영상 소재는 유튜브·틱톡에서만. 쿠팡은 소재가 아니라 「같은 상품 확인」 단계 (아래 별도 카드).
+  const corePlatforms = [
+    {id:'youtube', label:'▶ 유튜브', sub: isPet ? '실사 쇼츠' : '쇼츠·리뷰·CC롱폼'},
+    {id:'tiktok', label:'🎵 틱톡', sub: isPet ? '펫 리액션' : '외국어 소재'},
+  ];
   const extraPlatforms = [
     {id:'douyin', label:'抖 도우인', sub:'중국어 · IP 필요'},
     {id:'xhs', label:'小 샤오홍슈', sub:'중국어 · IP 필요'},
@@ -4949,6 +4950,12 @@ function renderAnalysis(){
         <div class="hunt-plat-toggles">
           ${corePlatforms.map(platformBtn).join('')}
         </div>
+        ${!isPet ? `
+          <label style="display:flex; align-items:center; gap:8px; font-size:12.5px; margin-top:8px; cursor:pointer; font-weight:600;">
+            <input type="checkbox" id="tiktokForeignOnly" ${hunt.tiktokForeignOnly!==false?'checked':''}>
+            틱톡은 외국어 소재만 (한국어 제목 제외 · 국내 미노출 소재 확보)
+          </label>
+        ` : ''}
       </div>
 
       <div class="field">
@@ -5045,19 +5052,25 @@ function renderAnalysis(){
             return `<button type="button" class="ax-chip" data-remove-source-video="${i}" title="${escHtml(v.title||'')}">${escHtml(label)}</button>`;
           }).join('')}
         </div>
-        <button type="button" class="btn" id="sendPicksToStudioBtn" style="width:100%; padding:12px; font-weight:800;">
-          🎬 편집 스튜디오로 보내기 (다운로드 도우미 + 자동 매칭)
-        </button>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+          <button type="button" class="btn" id="sendPicksToStudioBtn" style="padding:12px; font-weight:800;">
+            🎬 편집 스튜디오로 보내기
+          </button>
+          <button type="button" class="btn secondary" id="checkCoupangForPicksBtn" style="padding:12px; font-weight:800;">
+            🛒 쿠팡에 같은 상품 있는지 확인
+          </button>
+        </div>
         <div class="settings-note" style="margin-top:8px; font-size:12px;">
           유튜브·틱톡은 브라우저에서 직접 편집이 안 되므로 <b>참조 링크</b>로 저장돼요. 스튜디오에서 「💾 다운로드 도우미」로 mp4를 저장한 뒤 업로드하세요.
+          쿠팡 확인은 파트너스 링크·가격·스펙 확보용입니다.
         </div>
       </div>
     ` : ''}
 
     ${!isPet ? `
-      <details class="card" style="padding:0;">
+      <details class="card" style="padding:0;" ${state.coupangAccordionOpen?'open':''}>
         <summary style="cursor:pointer; padding:14px 18px; font-weight:800; font-size:14px;">
-          🔬 상품 정보 분석 (선택 · 대본 품질 향상용)
+          🛒 쿠팡 상품 확인 · 정보 분석 (선택 · 파트너스 링크/대본용)
         </summary>
         <div style="padding:0 18px 18px;">
           <div class="settings-note" style="margin-bottom:10px;">쿠팡 상품을 불러오거나 리뷰·설명을 넣으면 상품별 특징을 뽑아 대본 카피에 반영합니다. 필수는 아니에요.</div>
@@ -9707,6 +9720,52 @@ document.addEventListener('click', async (e)=>{
     return;
   }
 
+  if(e.target.id === 'checkCoupangForPicksBtn'){
+    const picks = state.selectedSourceVideos || [];
+    const hunt = ensureSourceHunt();
+    // 검색어 우선순위: 사용자가 넣은 키워드 → 첫 담은 영상 제목 정제
+    let q = String(hunt.keyword || '').trim();
+    if(!q && picks.length){
+      q = cleanProductTitle(picks[0].title || '').split(/\s+/).slice(0, 6).join(' ');
+    }
+    if(!q){
+      setStatus('coupang-search','err','검색어가 없어요. 키워드를 입력하거나 영상을 먼저 담아주세요.');
+      state.coupangAccordionOpen = true;
+      render();
+      return;
+    }
+    if(!state.keys.coupangAccessKey || !state.keys.coupangSecretKey){
+      state.coupangAccordionOpen = true;
+      render();
+      setTimeout(()=> setStatus('coupang-search','err','쿠팡파트너스 API 키가 필요해요. 설정에서 입력하세요.'), 0);
+      return;
+    }
+    state.coupangQuery = q;
+    state.coupangAccordionOpen = true;
+    render();
+    setStatus('coupang-search','loading',`「${q}」 쿠팡에서 같은 상품 검색 중...`);
+    try{
+      const result = await coupangSearch(q, 10);
+      const list = result.data?.productData || (Array.isArray(result.data) ? result.data : []);
+      state.coupangResults = list.map(p => ({
+        name: p.productName || p.name || '',
+        price: p.productPrice ?? p.price ?? null,
+        image: p.productImage || p.imageUrl || '',
+        url: p.productUrl || p.landingUrl || '',
+        productId: p.productId || null,
+        isRocket: !!p.isRocket, isFreeShipping: !!p.isFreeShipping,
+        categoryName: p.categoryName || '',
+        matchScore: titleMatchScore(q, p.productName || p.name || ''),
+      })).sort((a,b)=> (b.matchScore||0) - (a.matchScore||0));
+      setStatus('coupang-search', state.coupangResults.length ? 'ok' : 'err',
+        state.coupangResults.length ? `${state.coupangResults.length}개 발견 — 아래에서 상품을 불러오면 파트너스 링크·스펙이 대본에 반영됩니다.` : '같은 상품을 찾지 못했어요. 키워드를 바꿔보세요.');
+      render();
+    }catch(err){
+      setStatus('coupang-search','err', err?.message || String(err));
+    }
+    return;
+  }
+
   if(e.target.id === 'petSendToStudioBtn' || e.target.id === 'sendPicksToStudioBtn'){
     const picks = state.selectedSourceVideos || [];
     if(!picks.length){
@@ -12059,6 +12118,10 @@ document.addEventListener('change', async (e)=>{
   if(e.target.id === 'prodNarrationSource'){
     collectProductionOptionsFromUI();
     render();
+    return;
+  }
+  if(e.target.id === 'tiktokForeignOnly'){
+    ensureSourceHunt().tiktokForeignOnly = !!e.target.checked;
     return;
   }
   if(e.target.id === 'prodManualScriptText'){
