@@ -23006,7 +23006,9 @@ ${toolTitleCoreRulesPrompt(nowContext().year)}
     const isH2InfoDomain = typeof isH2InfoDomainKey === "function" ? isH2InfoDomainKey(domainKey) : false;
     const isFeedDomain = typeof isMobileFeedNoH2DomainKey === "function" ? isMobileFeedNoH2DomainKey(domainKey) : false;
     const isEntDomain = typeof isEntertainmentDomainMode === "function" ? isEntertainmentDomainMode() : false;
-    const h2On = st.h2_on !== false && h2Range.base > 0;
+    const hasH2Override = state && state.overrideH2Method && state.forcedH2Mode;
+    const forcedMode = hasH2Override ? String(state.forcedH2Mode).toLowerCase() : "";
+    const h2On = hasH2Override ? (forcedMode === "h2") : (st.h2_on !== false && h2Range.base > 0);
     const h2ToneKey = isEntDomain ? "entertainment" : (isH2InfoDomain ? "info" : (isFeedDomain ? "feed" : "generic"));
     const h2SubtitleBlock = !h2On ? `
 [SECTION 3-2 — 홈판 소제목(H2) 없음 · 피드형]
@@ -23170,7 +23172,11 @@ ${h2SubtitleBlock}
     const imgStyleLabel = imageStyleLabel(st.image_style);
     const imgStyleRule = imageStylePromptText(st.image_style);
     const desiredImages = desiredImagePromptCount();
-    return `너는 네이버 차세대 AI 검색 서비스인 AI 브리핑(AEO) 엔진이 즉시 인용할 수 있는 블록형 정보 문서를 만드는 데이터 기반 AI 검색 최적화(AEO) 스페셜리스트다. 목표는 검색자가 질문한 개념·기준·차이·절차를 기계가 독립 문단 단위로 스캔할 수 있게 정리하는 것이다.
+    const hasH2Override = state && state.overrideH2Method && state.forcedH2Mode;
+    const forcedMode = hasH2Override ? String(state.forcedH2Mode).toLowerCase() : "";
+    const useH2 = hasH2Override ? (forcedMode === "h2") : true;
+    const aeoModifier = !useH2 ? "\n★ 주의: 사용자가 H2 구조를 비활성화했습니다. 이 경우 소제목 없이 독립 문단 블록으로만 정보를 구성하세요. <h2> 태그를 사용하지 말고 흐름 있는 문단으로 대신하십시오." : "";
+    return `너는 네이버 차세대 AI 검색 서비스인 AI 브리핑(AEO) 엔진이 즉시 인용할 수 있는 블록형 정보 문서를 만드는 데이터 기반 AI 검색 최적화(AEO) 스페셜리스트다. 목표는 검색자가 질문한 개념·기준·차이·절차를 기계가 독립 문단 단위로 스캔할 수 있게 정리하는 것이다.${aeoModifier}
 ${dg}
 
 ${nowContext().line}
@@ -23320,9 +23326,28 @@ ${buildGovsupportV7Rules("AI 브리핑")}
   }
 
 
-  function buildCafeCommunitySystemPrompt(dg) {
+  function buildCafeCommunitySystemPrompt(dg, h2Mode) {
     const now = nowContext();
     const desiredImages = desiredImagePromptCount();
+    const useH2 = h2Mode === "h2";
+    const h2StructureBlock = useH2 ? `
+[H2 정보형 구조 — 카페 정보형 글 (H2 모드 활성화)]
+- html_content에는 <h2> 태그를 사용한 소제목을 반드시 포함한다. 소제목 앞 번호("1.", "2.") 금지.
+- 소제목 개수는 기본 3~4개, 최대 5개. 너무 많으면 카페 읽기 피로도 증가.
+- 각 H2는 명확한 역할(개요·조건·방법·주의·결론)을 하나씩만 담고, 아래 본문은 최소 150자 이상 최대 250자 범위로 작성.
+- 첫 번째 H2는 주제 개요, 마지막 H2는 결론 또는 다음 행동으로 끝낸다.
+- 표를 포함할 수 있으며, 표가 있으면 1개만 두고 직후 120자 안팎 해석 문단을 붙인다.
+- 소제목 톤은 대사 형식(궁금증 반영)과 정보형을 자연스럽게 섞는다. 예: "꼭 확인해야 할 3가지", "실제 절차와 팁", "놓치기 쉬운 부분".
+- FAQ는 html_content에 직접 넣지 않고 faq 필드는 빈 배열로 둔다.
+` : `
+[NO H2 피드형 구조 — 카페 피드형 글 (피드 모드 활성화)]
+- html_content에는 <h2> 태그를 사용하지 않는다. 소제목이 필요하면 <p><strong>▶ 소제목</strong></p> 형태만 사용.
+- 본문 흐름은 짧은 도입 → 핵심 팁 또는 체크 항목 → 주의 또는 다음 행동으로 구성한다.
+- 문단은 2~3줄(50~150자 범위) 짧고 읽기 편한 길이로 유지. 긴 문단 금지.
+- 이미지, 강조 문구, 짧은 문단으로 모바일 홈피드처럼 빠르게 훑을 수 있게 구성.
+- 표를 포함할 수 있으나 매우 간결하게(2x3 또는 3x2), 자세한 설명이 필요하면 표를 쓰지 않는다.
+- 전체 본문은 공백 포함 700~900자 범위로, 밀도 높은 정보와 가독성을 균형있게 유지.
+`;
     return [
       "너는 네이버 카페 등 온라인 커뮤니티에 올리는 글을 쓰는 한국어 카페 글쓰기 전문가다. 목표는 조회수·댓글·스크랩이 잘 나오는, 진짜 사람이 쓴 것 같은 정보공유 글을 주제 분야에 맞게 쓰는 것이다.",
       dg || "",
@@ -23352,12 +23377,13 @@ ${buildGovsupportV7Rules("AI 브리핑")}
       "- 확실하지 않은 정보는 단정하지 말고 완화 표현을 쓰며 uncertain_claims에 기록한다.",
       "",
       "[구조와 분량]",
-      "- 본문은 공백 포함 800~1000자, 기본 900자를 목표로 한다. 긴 설명·반복 요약·불필요한 인삿말을 줄인다.",
+      useH2 ? "- 본문은 공백 포함 900~1200자, 기본 1000자를 목표로 한다. 소제목별로 명확한 정보를 담는다."
+           : "- 본문은 공백 포함 800~1000자, 기본 900자를 목표로 한다. 긴 설명·반복 요약·불필요한 인삿말을 줄인다.",
       "- 흐름은 짧은 공감 도입, 바로 써먹는 팁 또는 체크 3개 전후, 아쉬운 점·주의 1줄, 앞으로 해볼 방향 또는 댓글 유도 질문으로 구성한다.",
       "- 품질 축: 사람들이 지금 궁금해하는 각도에 답하고, 정보 나열이 아니라 바로 써먹는 실전 팁·주의·다음 행동을 남긴다. 최신성이 중요한 주제면 시점·확인 경로를 한 줄이라도 넣는다.",
       "- 매 글 같은 틀을 반복하지 말고 주제에 맞게 방법형, 비교형, 의견형, 후기형, 개념형 중 자연스러운 전개를 고른다.",
-      "- 소제목을 쓰면 h2/h3가 아니라 <p><strong>▶ 소제목</strong></p> 또는 <p><strong>- 소제목</strong></p> 형태만 쓴다. 소제목 앞에 \"1.\", \"2.\" 같은 번호는 붙이지 말고, 숫자나 기호만 홀로 두지 않는다.",
-      "- 핵심 요약 박스, 목차, 비교표, FAQ 블록, CTA 버튼, 광고성 하이라이트 박스는 html_content에 넣지 않는다.",
+      h2StructureBlock,
+      "- 핵심 요약 박스, 목차, FAQ 블록, CTA 버튼, 광고성 하이라이트 박스는 html_content에 넣지 않는다.",
       "- 본문 <p>는 font-size:16px; line-height:1.8 중심으로 쓴다. 큰 제목 배너와 과한 인라인 디자인은 피한다.",
       "",
       "[금지 사항]",
@@ -23447,7 +23473,12 @@ ${buildGovsupportV7Rules("AI 브리핑")}
     if (catKey === "tool") return appendRelatedKeywordsToSystemPrompt(buildIntegratedSearchSystemPrompt(dg));
     if (catKey === "trend") return appendRelatedKeywordsToSystemPrompt(buildHomeFeedSystemPrompt(dg));
     if (catKey === "concept") return appendRelatedKeywordsToSystemPrompt(buildAiBriefingSystemPrompt(dg));
-    if (catKey === "cafe") return appendRelatedKeywordsToSystemPrompt(buildCafeCommunitySystemPrompt(dg));
+    if (catKey === "cafe") {
+      const cafeFlow = state && state.cafeFlow ? String(state.cafeFlow).toLowerCase() : "keyword";
+      const h2Mode = cafeFlow === "keyword" ? (state && state.keywordH2Mode ? String(state.keywordH2Mode) : "h2")
+                   : (state && state.cafeH2Mode ? String(state.cafeH2Mode) : "h2");
+      return appendRelatedKeywordsToSystemPrompt(buildCafeCommunitySystemPrompt(dg, h2Mode));
+    }
     return appendRelatedKeywordsToSystemPrompt(`너는 어떤 주제 분야든 소화하는 한국어 네이버 블로그 전문 작가다. 목표는 단순 '상위 노출'이 아니라 "네이버 AI 브리핑이 그대로 인용하는, 정확하고 읽기 좋은 블로그 글"을, 주어진 주제 분야에 딱 맞게 쓰는 것이다. 아래 지침을 예외 없이 지켜라.
 ${dg}
 
