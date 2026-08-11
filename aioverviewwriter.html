@@ -6242,6 +6242,23 @@
       <input type="text" id="domainCustomInput">
       <button class="btn small" id="btnDomainCustomConfirm">선택 완료</button>
     </div>
+
+    <!-- H2/NO H2 수동 선택 옵션 -->
+    <div id="h2OverrideControl" style="margin-bottom:20px; padding:12px 16px; background:rgba(124,107,255,.06); border:1px solid rgba(124,107,255,.15); border-radius:10px; display:none;">
+      <label style="display:flex; align-items:center; gap:8px; margin-bottom:12px; cursor:pointer;">
+        <input type="checkbox" id="overrideH2MethodCheck" style="cursor:pointer;">
+        <span style="font-weight:600; font-size:13px;">H2/NO H2 방식 수동 선택</span>
+      </label>
+      <div id="h2MethodSelector" style="display:none; display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="h2-mode-btn" data-mode="h2" style="flex:1; padding:10px; border:1.5px solid rgba(124,107,255,.3); background:rgba(124,107,255,.05); border-radius:8px; cursor:pointer; font-size:12px; font-weight:600; color:var(--text); transition:all 0.2s;">
+          📊 H2 정보형
+        </button>
+        <button class="h2-mode-btn" data-mode="feed" style="flex:1; padding:10px; border:1.5px solid rgba(176,131,255,.3); background:rgba(176,131,255,.05); border-radius:8px; cursor:pointer; font-size:12px; font-weight:600; color:var(--text); transition:all 0.2s;">
+          📱 NO H2 피드형
+        </button>
+      </div>
+    </div>
+
     <div class="domain-grid" id="domainGrid"></div>
   </div>
 </div>
@@ -6524,6 +6541,8 @@
     regionalProgramDocs: null, // 지자체·유사 지역 지원사업 비교 검색 결과
     factSources: null, // 신뢰 출처 원문 발췌 (사실 검증용)
     topicDomain: null, // {key, emoji, label}
+    overrideH2Method: false, // H2/NO H2 수동 선택 활성화
+    forcedH2Mode: null, // null | "h2" | "feed" — 사용자가 수동으로 선택한 방식
     topicCount: 20,    // 추천 수 기본: 20 (10 | 20 | 30 | 40 | 50)
     shoppingProduct: null, // 쇼핑 제휴 판매형: {url, connectUrl, title, brand, price, summary, sellingPoints, screenshots[]}
     topicIdeaSession: null, // 현재 주제 목록 추가 조회 컨텍스트
@@ -9412,6 +9431,26 @@
     // 에러 메시지 숨김
     const req = document.getElementById("topicCatRequired");
     if (req) req.classList.remove("visible");
+    // 카테고리 변경 시 H2 오버라이드 상태 리셋 + 도메인 그리드 재렌더
+    try {
+      state.overrideH2Method = false;
+      state.forcedH2Mode = null;
+      const overrideCheck = document.getElementById("overrideH2MethodCheck");
+      if (overrideCheck) overrideCheck.checked = false;
+      const h2MethodSelector = document.getElementById("h2MethodSelector");
+      if (h2MethodSelector) h2MethodSelector.style.display = "none";
+      const h2ModeBtns = document.querySelectorAll(".h2-mode-btn");
+      h2ModeBtns.forEach(btn => {
+        btn.style.borderColor = "";
+        btn.style.background = "";
+      });
+      renderDomainGrid();
+      const overrideControl = document.getElementById("h2OverrideControl");
+      if (overrideControl) {
+        const isTrendOrConcept = catKey === "trend" || catKey === "concept";
+        overrideControl.style.display = isTrendOrConcept ? "block" : "none";
+      }
+    } catch (_) {}
     if (hasProjectContent()) scheduleProjectAutosave("category");
   }
 
@@ -9846,6 +9885,25 @@
   function isMobileFeedNoH2Domain(domain) {
     return !!(domain && isMobileFeedNoH2DomainKey(domain.key));
   }
+
+  // 카테고리·H2 모드에 따라 보여줄 도메인 필터링
+  function getDomainsForCategory(category, forcedMode = null) {
+    // 사용자가 H2/NO H2를 수동으로 선택한 경우
+    if (forcedMode === "h2") {
+      return TOPIC_DOMAINS.filter(d => isH2InfoDomainKey(d.key));
+    }
+    if (forcedMode === "feed") {
+      return TOPIC_DOMAINS.filter(d => !isH2InfoDomainKey(d.key));
+    }
+
+    // 기본값: 카테고리별 자동 필터
+    if (category === "tool") return TOPIC_DOMAINS; // 통합글쓰기: 전부
+    if (category === "trend") return TOPIC_DOMAINS.filter(d => !isH2InfoDomainKey(d.key)); // 홈판: NO H2만
+    if (category === "concept") return TOPIC_DOMAINS.filter(d => isH2InfoDomainKey(d.key)); // AI브리핑: H2만
+
+    return TOPIC_DOMAINS; // 카페·블로그 등: 전부
+  }
+
   try { state.topicDomain = normalizeTopicDomain(state.topicDomain); } catch (_) {}
 
   // Gold/분야 선택 UI는 TOPIC_DOMAINS가 초기화된 뒤에만 렌더한다.
@@ -9883,14 +9941,42 @@
       </section>
     `;
   }
+  // 도메인 그리드를 현재 카테고리·H2 모드에 맞게 렌더
+  function renderDomainGrid() {
+    if (!domainGrid) return;
+
+    const h2Override = state.overrideH2Method && state.forcedH2Mode;
+    const displayDomains = getDomainsForCategory(state.category, h2Override ? state.forcedH2Mode : null);
+
+    // 사용자가 수동 선택했으면 두 섹션으로, 아니면 모두 하나의 섹션으로
+    if (h2Override) {
+      domainGrid.classList.remove("domain-grid--split");
+      const styleKey = state.forcedH2Mode === "h2" ? "h2" : "feed";
+      const title = state.forcedH2Mode === "h2" ? "H2 정보형 글쓰기" : "소제목 없는 피드형 글쓰기";
+      const note = state.forcedH2Mode === "h2" ? "소제목·표·FAQ 중심으로 정리하는 검색형 정보글" : "중앙 문단·이미지 흐름 중심의 모바일 홈판형 글";
+      domainGrid.innerHTML = domainSectionHtml(styleKey, title, note, displayDomains);
+    } else {
+      // 기본값: H2/NO H2 두 섹션
+      domainGrid.classList.add("domain-grid--split");
+      const h2Domains = displayDomains.filter(d => isH2InfoDomainKey(d.key));
+      const feedDomains = displayDomains.filter(d => !isH2InfoDomainKey(d.key));
+      domainGrid.innerHTML = [
+        (h2Domains.length > 0 ? domainSectionHtml("h2", "H2 정보형 글쓰기", "소제목·표·FAQ 중심으로 정리하는 검색형 정보글", h2Domains) : ""),
+        (feedDomains.length > 0 ? domainSectionHtml("feed", "소제목 없는 피드형 글쓰기", "중앙 문단·이미지 흐름 중심의 모바일 홈판형 글", feedDomains) : "")
+      ].filter(Boolean).join("");
+    }
+
+    // 도메인 카드 클릭 이벤트 재연결
+    domainGrid.querySelectorAll(".domain-card").forEach(card => {
+      card.onclick = () => {
+        const domain = TOPIC_DOMAINS.find(d => d.key === card.dataset.domainKey);
+        if (domain) selectDomain(domain);
+      };
+    });
+  }
+
   if (domainGrid) {
-    const h2Domains = TOPIC_DOMAINS.filter(d => isH2InfoDomainKey(d.key));
-    const feedDomains = TOPIC_DOMAINS.filter(d => !isH2InfoDomainKey(d.key));
-    domainGrid.classList.add("domain-grid--split");
-    domainGrid.innerHTML = [
-      domainSectionHtml("h2", "H2 정보형 글쓰기", "소제목·표·FAQ 중심으로 정리하는 검색형 정보글", h2Domains),
-      domainSectionHtml("feed", "소제목 없는 피드형 글쓰기", "중앙 문단·이미지 흐름 중심의 모바일 홈판형 글", feedDomains)
-    ].join("");
+    renderDomainGrid();
   }
 
   // ---------- 추천 수 버튼 ----------
@@ -9904,6 +9990,14 @@
 
   document.getElementById("btnTopicDomain").onclick = () => {
     document.getElementById("domainModal").style.display = "flex";
+    // 도메인 모달 열 때 H2 오버라이드 컨트롤 갱신
+    try {
+      const overrideControl = document.getElementById("h2OverrideControl");
+      if (overrideControl) {
+        const isTrendOrConcept = state.category === "trend" || state.category === "concept";
+        overrideControl.style.display = isTrendOrConcept ? "block" : "none";
+      }
+    } catch (_) {}
   };
   document.getElementById("btnCloseDomain").onclick = () => closeDomainModal();
   document.getElementById("domainModal").addEventListener("click", (e) => {
@@ -9913,6 +10007,69 @@
     document.getElementById("domainModal").style.display = "none";
     document.getElementById("domainCustomRow").style.display = "none";
   }
+
+  // H2/NO H2 수동 선택 옵션 이벤트
+  function setupH2OverrideControls() {
+    const overrideControl = document.getElementById("h2OverrideControl");
+    const overrideCheck = document.getElementById("overrideH2MethodCheck");
+    const h2MethodSelector = document.getElementById("h2MethodSelector");
+    const h2ModeBtns = document.querySelectorAll(".h2-mode-btn");
+
+    if (!overrideControl || !overrideCheck || !h2MethodSelector) return;
+
+    // 도메인 모달 열 때 H2 오버라이드 컨트롤 표시 여부 결정
+    function updateH2OverrideVisibility() {
+      const isTrendOrConcept = state.category === "trend" || state.category === "concept";
+      overrideControl.style.display = isTrendOrConcept ? "block" : "none";
+    }
+
+    // 체크박스 변경 이벤트
+    overrideCheck.onchange = () => {
+      state.overrideH2Method = overrideCheck.checked;
+      h2MethodSelector.style.display = overrideCheck.checked ? "flex" : "none";
+      if (!overrideCheck.checked) {
+        state.forcedH2Mode = null;
+        // 모드 버튼 선택 해제
+        h2ModeBtns.forEach(btn => btn.style.borderColor = "");
+      }
+      renderDomainGrid();
+      if (hasProjectContent()) scheduleProjectAutosave("h2-override");
+    };
+
+    // H2 모드 버튼 클릭 이벤트
+    h2ModeBtns.forEach(btn => {
+      btn.onclick = () => {
+        const mode = btn.dataset.mode;
+        state.forcedH2Mode = mode;
+        state.overrideH2Method = true;
+        overrideCheck.checked = true;
+
+        // 선택 상태 시각화
+        h2ModeBtns.forEach(b => {
+          if (b === btn) {
+            b.style.borderColor = mode === "h2" ? "rgba(124,107,255,.6)" : "rgba(176,131,255,.6)";
+            b.style.background = mode === "h2" ? "rgba(124,107,255,.15)" : "rgba(176,131,255,.15)";
+          } else {
+            b.style.borderColor = "";
+            b.style.background = "";
+          }
+        });
+
+        renderDomainGrid();
+        if (hasProjectContent()) scheduleProjectAutosave("h2-override");
+      };
+    });
+
+    // 카테고리 변경 시 H2 오버라이드 컨트롤 갱신 (이 함수가 호출되도록 함)
+    // 기존 selectCategory 함수에서 호출되어야 함
+    if (typeof window._originalSelectCategory === "undefined") {
+      window._originalSelectCategory = typeof selectCategory !== "undefined" ? selectCategory : null;
+    }
+
+    updateH2OverrideVisibility();
+  }
+
+  setupH2OverrideControls();
 
   function selectDomain(domain) {
     // 구버전 저장 프로젝트: 부업·N잡 → 방송/연예인, 제거된 분야는 null 처리
