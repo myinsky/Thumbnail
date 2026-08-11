@@ -5263,10 +5263,6 @@
             <div class="hint">키워드나 질문을 입력하고 Enter를 누르면 AI가 가능한 소재를 먼저 제시합니다.</div>
           </div>
         </div>
-        <div class="keyword-finder-hint-inline" id="keywordFinderJumpHint">
-          다음 주부터 4주 황금 키워드 선점은 왼쪽 <b>05 · Gold · 4주 황금 키워드</b>에서 확인하세요.
-          <button type="button" class="btn small" id="btnOpenKeywordFinder" style="margin-left:8px;padding:5px 10px;font-size:11.5px;">4주 캘린더 열기</button>
-        </div>
         <div class="keyword-title-panel" id="keywordTitleSuggestBlock" aria-hidden="false">
           <div class="keyword-title-head">
             <b>② 관련 글감 선택</b>
@@ -26246,8 +26242,7 @@ ${demand || "(없음)"}
     const steps = [
       { n: 1, t: "연관어", d: "네이버 함께찾는·자동완성" },
       { n: 2, t: "검색량", d: "PC / MO / Total" },
-      { n: 3, t: "황금점수", d: "경쟁·의도·수요" },
-      { n: 4, t: "4주 캘린더", d: "선점 일정 배치" }
+      { n: 3, t: "황금점수", d: "경쟁·의도·수요" }
     ];
     const stepHtml = steps.map(s => {
       const cls = s.n < step ? "done" : (s.n === step ? "on" : "");
