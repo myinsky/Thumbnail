@@ -5254,6 +5254,19 @@
           <label class="field-label"><span class="writing-input-title">추가 요청 / 맥락</span> <span class="opt-badge">선택사항</span></label>
           <textarea id="inputExtra" placeholder="원하는 톤, 꼭 넣을 기준, 피해야 할 표현을 짧게 적어 주세요."></textarea>
         </div>
+
+        <!-- 키워드 글쓰기 H2/NO H2 선택 -->
+        <div id="keywordH2Override" style="margin-top:14px; padding:12px 16px; background:rgba(124,107,255,.06); border:1px solid rgba(124,107,255,.15); border-radius:10px;">
+          <label style="display:flex; align-items:center; gap:8px; margin-bottom:12px; cursor:pointer;">
+            <input type="radio" name="keywordH2Mode" value="h2" checked style="cursor:pointer;">
+            <span style="font-weight:600; font-size:13px;">📊 H2 정보형 (기본)</span>
+          </label>
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <input type="radio" name="keywordH2Mode" value="feed" style="cursor:pointer;">
+            <span style="font-weight:600; font-size:13px;">📱 NO H2 피드형</span>
+          </label>
+        </div>
+
         <div class="cafe-dialogue-panel" id="cafeDialoguePanel">
           <div class="cafe-dialogue-head">
             <b>AI 소재 대화</b>
@@ -5320,6 +5333,19 @@
           </button>
         </div>
         <div class="cafe-flow-hint" id="cafeFlowHint">원하는 카페 작성 방식을 선택하면 다음 입력 단계가 열립니다.</div>
+
+        <!-- 카페 글쓰기 H2/NO H2 선택 -->
+        <div id="cafeH2Override" style="margin-top:16px; padding:12px 16px; background:rgba(124,107,255,.06); border:1px solid rgba(124,107,255,.15); border-radius:10px;">
+          <label style="display:flex; align-items:center; gap:8px; margin-bottom:12px; cursor:pointer;">
+            <input type="radio" name="cafeH2Mode" value="h2" checked style="cursor:pointer;">
+            <span style="font-weight:600; font-size:13px;">📊 H2 정보형 (기본)</span>
+          </label>
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <input type="radio" name="cafeH2Mode" value="feed" style="cursor:pointer;">
+            <span style="font-weight:600; font-size:13px;">📱 NO H2 피드형</span>
+          </label>
+        </div>
+
         <div class="cafe-image-setting">
           <div>
             <b>카페 이미지 수량</b>
@@ -6539,6 +6565,8 @@
     topicDomain: null, // {key, emoji, label}
     overrideH2Method: false, // H2/NO H2 수동 선택 활성화
     forcedH2Mode: null, // null | "h2" | "feed" — 사용자가 수동으로 선택한 방식
+    cafeH2Mode: "h2", // 카페 글쓰기 H2 방식 (기본: "h2")
+    keywordH2Mode: "h2", // 키워드 글쓰기 H2 방식 (기본: "h2")
     topicCount: 20,    // 추천 수 기본: 20 (10 | 20 | 30 | 40 | 50)
     shoppingProduct: null, // 쇼핑 제휴 판매형: {url, connectUrl, title, brand, price, summary, sellingPoints, screenshots[]}
     topicIdeaSession: null, // 현재 주제 목록 추가 조회 컨텍스트
@@ -9896,8 +9924,10 @@
     if (category === "tool") return TOPIC_DOMAINS; // 통합글쓰기: 전부
     if (category === "trend") return TOPIC_DOMAINS.filter(d => !isH2InfoDomainKey(d.key)); // 홈판: NO H2만
     if (category === "concept") return TOPIC_DOMAINS.filter(d => isH2InfoDomainKey(d.key)); // AI브리핑: H2만
+    if (category === "cafe") return TOPIC_DOMAINS; // 카페: 전부 (H2/NO H2는 선택)
+    if (category === "keyword") return TOPIC_DOMAINS; // 키워드: 전부 (H2/NO H2는 선택)
 
-    return TOPIC_DOMAINS; // 카페·블로그 등: 전부
+    return TOPIC_DOMAINS; // 블로그+쇼핑 등: 전부
   }
 
   try { state.topicDomain = normalizeTopicDomain(state.topicDomain); } catch (_) {}
@@ -10071,6 +10101,31 @@
   }
 
   setupH2OverrideControls();
+
+  // 카페 글쓰기 H2/NO H2 선택 이벤트
+  function setupCafeH2ModeControls() {
+    const cafeH2Radios = document.querySelectorAll('input[name="cafeH2Mode"]');
+    cafeH2Radios.forEach(radio => {
+      radio.onchange = () => {
+        state.cafeH2Mode = radio.value;
+        if (hasProjectContent()) scheduleProjectAutosave("cafe-h2-mode");
+      };
+    });
+  }
+
+  // 키워드 글쓰기 H2/NO H2 선택 이벤트
+  function setupKeywordH2ModeControls() {
+    const keywordH2Radios = document.querySelectorAll('input[name="keywordH2Mode"]');
+    keywordH2Radios.forEach(radio => {
+      radio.onchange = () => {
+        state.keywordH2Mode = radio.value;
+        if (hasProjectContent()) scheduleProjectAutosave("keyword-h2-mode");
+      };
+    });
+  }
+
+  setupCafeH2ModeControls();
+  setupKeywordH2ModeControls();
 
   function selectDomain(domain) {
     // 구버전 저장 프로젝트: 부업·N잡 → 방송/연예인, 제거된 분야는 null 처리
