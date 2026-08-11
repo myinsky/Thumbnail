@@ -1188,6 +1188,9 @@
     max-width:none; max-height:none; object-fit:contain; display:block; background:#0B1220;
     pointer-events:none;
   }
+  /* 쇼츠 템플릿 화면 채움 미리보기 — 실제 내보내기는 ffmpeg 체인이 동일 규칙 적용 */
+  body[data-video-fit="cover"] .vp-media-layer video{object-fit:cover;}
+  body[data-video-fit="blur"] .vp-media-layer video{object-fit:contain;}
   .vp-media-handle{
     position:absolute; width:12px; height:12px; z-index:5;
     background:#60A5FA; border:2px solid #fff; border-radius:2px;
@@ -1904,6 +1907,8 @@ let state = {
   narrationSource: 'auto-ai', // 'auto-ai' | 'manual' | 'sfx-only'
   manualScriptText: '',       // narrationSource='manual' 일 때 사용자가 넣는 대사 원문
   continuityMode: 'chain',    // 'chain' = 첫 이미지 1장 → 클립 연속 확장 (일관성 최우선) | 'per-scene' = 씬마다 새 이미지
+  shortsTemplate: 'cover',    // 쇼츠 템플릿: cover|pad|blur|titlebar|meme
+  videoFitMode: 'pad',        // 내보내기/미리보기 화면 채움: cover|pad|blur (기존 동작 기본값 pad)
   castCount: 2,               // 주목 등장인물 수 (주인공 포함, 군중 제외 · 기본 2)
   drawHero: true,             // 주인공 이미지 생성 여부
   heroSource: 'ai',           // 주인공: ai | upload
@@ -3267,6 +3272,7 @@ function syncPreviewMonitorSize(){
 
 function render(){
   renderSidebar();
+  document.body.dataset.videoFit = state.videoFitMode || 'pad';
   document.getElementById('navHome').classList.toggle('active', state.current==='home');
   const c = document.getElementById('mainContent');
   const renderers = {
@@ -7243,6 +7249,158 @@ async function addSourcesToTimelineSequential(indices){
   }
 }
 
+/* ============================================================
+   바이럴 공식 자동 편집 · 쇼츠 템플릿 · 자동 대본
+============================================================ */
+const MAX_VIRAL_AUTO = 8; // 바이럴 자동 편집 동시 처리 상한
+
+const SHORTS_TEMPLATES = [
+  { id:'cover',    icon:'🔳', label:'꽉 채움',      desc:'9:16 가득 크롭 · 쇼츠 표준' },
+  { id:'pad',      icon:'⬛', label:'전체 보기',    desc:'원본 비율 유지 · 검정 여백' },
+  { id:'blur',     icon:'🌫️', label:'블러 배경',    desc:'원본 유지 + 흐린 배경 채움' },
+  { id:'titlebar', icon:'🏷️', label:'상단 제목바',  desc:'위 제목 밴드 + 하단 자막' },
+  { id:'meme',     icon:'💥', label:'밈 스타일',    desc:'큰 노란 제목 + 꽉 채움' },
+];
+
+function applyShortsTemplate(id){
+  const t = SHORTS_TEMPLATES.find(x=>x.id===id);
+  if(!t) return;
+  state.shortsTemplate = id;
+  state.videoFitMode = (id==='cover'||id==='meme') ? 'cover' : id==='blur' ? 'blur' : 'pad';
+  // 자막 기본 스타일
+  state.subStyle = { ...state.subStyle, position:'bottom', y:88, bold:true };
+  if(id==='titlebar'){
+    state.titleStyle = { ...state.titleStyle, fontSize:30, color:'#FFFFFF', bg:true, bgColor:'#111827', position:'top', y:8, bold:true, fontFamily:'Noto Sans KR', glow:false, outlineWidth:0 };
+  }else if(id==='meme'){
+    state.titleStyle = { ...state.titleStyle, fontSize:36, color:'#FFE400', bg:false, position:'top', y:10, bold:true, fontFamily:'Black Han Sans', glow:true, outlineWidth:4, outline:'#000000' };
+  }
+  // 제목 템플릿은 제목 자막 줄을 보장
+  if(id==='titlebar' || id==='meme'){
+    const totalDur = Math.max(5, getTimelineContentDuration() || 15);
+    const hasTitle = (state.subtitles||[]).some(s => s.kind === 'title');
+    if(!hasTitle){
+      state.subtitles = state.subtitles || [];
+      state.subtitles.push({ start:0, end:Number(totalDur.toFixed(1)), text:'여기에 제목 입력', kind:'title', lane:1 });
+    }
+  }
+}
+
+/** 조회수 공식 컷: 훅(0-2s) → 빠른 전개 → 페이오프 → 루프 꼬리. 총 10~15초. */
+async function buildViralEdlFromSelection(indices){
+  let idxs = (indices||[]).filter(i => state.sourceVideos[i] && !state.sourceVideos[i].isImage);
+  if(!idxs.length) throw new Error('영상 클립을 선택해주세요 (이미지는 제외).');
+  if(idxs.length > MAX_VIRAL_AUTO) idxs = idxs.slice(0, MAX_VIRAL_AUTO);
+
+  // 길이 메타 확보
+  for(const i of idxs){
+    if(!state.sourceDurations?.[i]){
+      try{ await ensureVideoDuration(i); }catch(_){ }
+    }
+  }
+  const durOf = (i)=> Math.max(3, Number(state.sourceDurations?.[i]) || 12);
+  const clamp = (i, start, len)=>{
+    const d = durOf(i);
+    let s = Math.max(0, Math.min(start, d - len - 0.2));
+    if(!(s >= 0)) s = 0;
+    return { videoIndex:i, start:Number(s.toFixed(2)), end:Number(Math.min(d, s+len).toFixed(2)) };
+  };
+
+  const first = idxs[0];
+  const last = idxs[idxs.length-1];
+  const mids = idxs.slice(1, Math.max(1, idxs.length-1));
+
+  const HOOK = 1.6, PAYOFF = 2.4, TAIL = 1.2;
+  // 중간 컷 길이: 총합이 10~15초 안에 들어오게 자동 조정
+  let midLen = 1.5;
+  const fixed = HOOK + PAYOFF + TAIL;
+  if(mids.length){
+    midLen = Math.max(1.1, Math.min(2.0, (13.5 - fixed) / mids.length));
+  }
+
+  const segs = [];
+  // ① 훅 — 첫 영상, 인트로(앞 12%) 건너뛴 지점
+  segs.push({ ...clamp(first, durOf(first)*0.12, HOOK), role:'hook' });
+  // ② 전개 — 중간 영상들, 30%→65% 사이 서로 다른 지점
+  mids.forEach((vi, k)=>{
+    const ratio = 0.30 + (k * 0.35 / Math.max(1, mids.length-1 || 1));
+    segs.push({ ...clamp(vi, durOf(vi)*ratio, midLen), role:'build' });
+  });
+  // ③ 페이오프 — 마지막 영상의 중심부 (결과/리액션이 몰리는 구간)
+  segs.push({ ...clamp(last, durOf(last)*0.45, PAYOFF), role:'payoff' });
+  // ④ 루프 꼬리 — 첫 영상의 다른 지점 → 끝나자마자 처음과 자연스럽게 이어져 반복 시청 유도
+  if(idxs.length >= 2){
+    segs.push({ ...clamp(first, durOf(first)*0.70, TAIL), role:'loop' });
+  }
+
+  // 총 길이 10초 미만이면 중간 지점을 더 뽑아 채움
+  let total = segs.reduce((a,s)=> a + (s.end - s.start), 0);
+  let extraK = 0;
+  while(total < 10 && extraK < 6){
+    const vi = idxs[extraK % idxs.length];
+    const seg = { ...clamp(vi, durOf(vi)*(0.2 + 0.1*extraK), 1.4), role:'build' };
+    segs.splice(segs.length-1, 0, seg); // 루프 꼬리 앞에 삽입
+    total += seg.end - seg.start;
+    extraK++;
+  }
+
+  return segs.map(s => ({
+    line: '',
+    videoIndex: s.videoIndex,
+    start: s.start,
+    end: s.end,
+    role: s.role,
+    volume: 0,
+  }));
+}
+
+/** 완성된 타임라인에서 끝까지 보게 만드는 나레이션 대본 생성 */
+async function generateRetentionScriptFromEdl(){
+  const edl = (state.sourceEDL||[]).filter(e => (e.track||1) === 1);
+  if(!edl.length) throw new Error('타임라인에 클립이 없어요. 먼저 자동 편집이나 배치를 해주세요.');
+  const clips = edl.map((e,i)=>({
+    i: i+1,
+    dur: Number(Math.max(0.5, e.end - e.start).toFixed(1)),
+    role: e.role || (i===0?'hook': i===edl.length-1?'payoff':'build'),
+    name: state.sourceVideos[e.videoIndex]?.name || '',
+    desc: e.line || e.suggestMeta?.reason || '',
+    maxChars: Math.max(8, Math.round(Math.max(0.5, e.end - e.start) * 4.2)),
+  }));
+  const productHint = compactStoryText(state.productDescription || state.selectedCoupang?.name || state.analysis?.product || '');
+  const system = [
+    '너는 쇼츠 리텐션(끝까지 보게 만들기) 전문 카피라이터다.',
+    '반드시 유효한 JSON 배열만 출력: [{"i":1,"line":"..."}, ...]. markdown/설명 금지.',
+    '규칙:',
+    '- 1번 줄(훅): 스크롤을 멈추게 하는 질문/충격/반전 예고. "이거 모르면 손해" 류 상투구 금지, 구체적으로.',
+    '- 중간 줄: 다음 컷이 궁금해지는 문장. 정보를 다 주지 말고 반만 줘서 궁금증 유지.',
+    '- 마지막 줄(페이오프): 보상 + 여운. 저장/팔로우 유도는 자연스럽게 한 번만.',
+    '- 각 줄은 maxChars 이내 (그 컷 길이 안에 발화 가능해야 함).',
+    '- 말하듯 자연스러운 한국어. 이모지·해시태그 금지.'
+  ].join('\n');
+  const userText = [
+    productHint ? '상품/주제: ' + productHint : '주제: 클립 이름에서 유추',
+    '',
+    '클립 목록 (i, 길이초 dur, 역할 role, 소스명 name, 메모 desc, 글자상한 maxChars):',
+    JSON.stringify(clips, null, 0),
+    '',
+    '각 클립에 맞는 나레이션 한 줄씩 JSON 배열로.'
+  ].join('\n');
+  const text = await callTextAi({ system, userText, maxTokens: 1400 });
+  const raw = String(text||'').replace(/```json|```/g,'').trim();
+  const s = raw.indexOf('['); const e2 = raw.lastIndexOf(']');
+  if(s < 0 || e2 <= s) throw new Error('대본 응답을 해석하지 못했어요.');
+  const arr = JSON.parse(raw.slice(s, e2+1));
+  if(!Array.isArray(arr) || !arr.length) throw new Error('대본이 비었어요.');
+  arr.forEach(entry=>{
+    const idx = Number(entry?.i) - 1;
+    if(idx >= 0 && idx < edl.length && typeof entry.line === 'string'){
+      edl[idx].line = entry.line.trim();
+    }
+  });
+  state.sourceScript = edl.map(e=>e.line).filter(Boolean).join('\n');
+  state.subtitles = computeTimelineFromEDL(state.sourceEDL, false);
+  return edl.filter(e=>e.line).length;
+}
+
 function fmtDur(sec){
   if(!sec || !isFinite(sec)) return '—';
   return `${String(Math.floor(sec/60)).padStart(2,'0')}:${String(Math.floor(sec%60)).padStart(2,'0')}`;
@@ -7738,8 +7896,26 @@ function renderManualAssembly(){
             </div>
           </div>
           ${(state.selectedSourceIndices||[]).length ? `
-            <button class="vp-btn primary block" id="selectedAutoEditBtn" type="button" style="margin-bottom:8px;">🤖 선택 ${state.selectedSourceIndices.length}개 자동 편집</button>
+            <button class="vp-btn primary block" id="viralAutoEditBtn" type="button" style="margin-bottom:6px;">⚡ 선택 ${Math.min(state.selectedSourceIndices.length, MAX_VIRAL_AUTO)}개 바이럴 컷 자동 편집 (10~15초)</button>
+            <div class="settings-note" style="margin:0 0 8px; font-size:11px;">훅→전개→페이오프→루프 공식으로 즉시 배치 · 최대 ${MAX_VIRAL_AUTO}개 · API 불필요</div>
+            <button class="vp-btn block" id="selectedAutoEditBtn" type="button" style="margin-bottom:8px;">🤖 대본 기반 AI 정밀 편집 (음성·장면 분석)</button>
+            ${statusHtml('viral-auto')}
             ${statusHtml('selected-auto')}
+          ` : ''}
+
+          <div class="vp-panel-title" style="margin-top:6px;"><div>쇼츠 템플릿</div></div>
+          <div style="display:grid; grid-template-columns:repeat(5,1fr); gap:4px; margin-bottom:8px;">
+            ${SHORTS_TEMPLATES.map(t=>`
+              <button type="button" class="vp-mini ${state.shortsTemplate===t.id?'go':''}" data-shorts-template="${t.id}" title="${escHtml(t.desc)}" style="display:flex; flex-direction:column; gap:2px; padding:6px 2px; height:auto; line-height:1.2;">
+                <span style="font-size:15px;">${t.icon}</span>
+                <span style="font-size:9.5px;">${t.label}</span>
+              </button>
+            `).join('')}
+          </div>
+
+          ${(state.sourceEDL||[]).length ? `
+            <button class="vp-btn tool accent block" id="autoScriptFromEdlBtn" type="button" style="margin-bottom:8px;" title="타임라인 클립에 맞춰 끝까지 보게 만드는 나레이션을 생성합니다">🎙 끝까지 보게 하는 대본 뽑기</button>
+            ${statusHtml('auto-script')}
           ` : ''}
           <div class="vp-media-grid">
             ${state.sourceVideos.length ? state.sourceVideos.map((v,i)=>{
@@ -10939,6 +11115,52 @@ document.addEventListener('click', async (e)=>{
     render();
   }
 
+  const tplChip = e.target.closest?.('[data-shorts-template]');
+  if(tplChip?.dataset.shortsTemplate){
+    applyShortsTemplate(tplChip.dataset.shortsTemplate);
+    render();
+    return;
+  }
+
+  if(e.target.id === 'viralAutoEditBtn'){
+    let idxs = (state.selectedSourceIndices||[]).slice().sort((a,b)=>a-b);
+    if(!idxs.length) return;
+    if(idxs.length > MAX_VIRAL_AUTO){
+      if(!confirm(`바이럴 컷은 한 번에 ${MAX_VIRAL_AUTO}개까지 처리해요. 앞쪽 ${MAX_VIRAL_AUTO}개만 사용할까요?`)) return;
+      idxs = idxs.slice(0, MAX_VIRAL_AUTO);
+    }
+    setStatus('viral-auto','loading','바이럴 공식으로 컷 배치 중 (훅→전개→페이오프→루프)...');
+    try{
+      const edl = await buildViralEdlFromSelection(idxs);
+      state.sourceEDL = edl;
+      state.selectedEdlIndex = 0;
+      state.tlFocus = 'clip';
+      state.tlEditMode = 'auto';
+      state.previewMode = 'timeline';
+      snapMainClipsTogether();
+      const total = edl.reduce((a,s)=> a + (s.end - s.start), 0);
+      setStatus('viral-auto','ok',`완료! ${edl.length}컷 · 총 ${total.toFixed(1)}초 — 이어서 「🎙 대본 뽑기」로 나레이션을 붙이세요.`);
+      state.selectedSourceIndices = [];
+      render();
+    }catch(err){
+      setStatus('viral-auto','err', err?.message || String(err));
+    }
+    return;
+  }
+
+  if(e.target.id === 'autoScriptFromEdlBtn'){
+    setStatus('auto-script','loading','타임라인 컷에 맞춰 리텐션 대본 생성 중... (' + textAiProviderLabel(getTextAiProvider()) + ')');
+    try{
+      const n = await generateRetentionScriptFromEdl();
+      setStatus('auto-script','ok',`${n}줄 생성 — 자막에 반영됐어요. 음성은 AI 탭의 나레이션 버튼으로 입히세요.`);
+      render();
+      scrollSubTrackIntoView();
+    }catch(err){
+      setStatus('auto-script','err', err?.message || String(err));
+    }
+    return;
+  }
+
   if(e.target.id === 'selectedAutoEditBtn'){
     let idxs = (state.selectedSourceIndices||[]).slice().sort((a,b)=>a-b);
     if(!idxs.length) return;
@@ -13994,11 +14216,17 @@ async function assembleFromSources(onProgress){
     const outName = `seg${j}.mp4`;
     const sv = state.sourceVideos[seg.videoIndex];
     const inName = sv._ffName || `src${seg.videoIndex}.mp4`;
-    // 클립별 효과를 필터 체인으로 조립
+    // 클립별 효과를 필터 체인으로 조립 — 쇼츠 템플릿의 화면 채움 방식 반영
+    const fit = state.videoFitMode || 'pad';
+    const baseFit = fit === 'cover'
+      ? [`scale=${W}:${H}:force_original_aspect_ratio=increase`, `crop=${W}:${H}`, 'setsar=1']
+      : fit === 'blur'
+        ? [`split=2[bgx][fgx];[bgx]scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},boxblur=22:2[bgo];[fgx]scale=${W}:${H}:force_original_aspect_ratio=decrease[fgo];[bgo][fgo]overlay=(W-w)/2:(H-h)/2`, 'setsar=1']
+        : [`scale=${W}:${H}:force_original_aspect_ratio=decrease`,
+           `pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:black`, 'setsar=1'];
     const chain = isOverlay
       ? [`scale=${Math.round(W*(seg.ovScale ?? 0.4))}:-2`, 'setsar=1']   // 오버레이는 축소만
-      : [`scale=${W}:${H}:force_original_aspect_ratio=decrease`,
-         `pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:black`, 'setsar=1'];
+      : baseFit;
 
     // 색보정 (밝기·대비·채도·감마)
     const br = seg.brightness ?? 0, ct = seg.contrast ?? 1;
