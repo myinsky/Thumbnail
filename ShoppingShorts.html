@@ -3034,7 +3034,8 @@ function launchPreset(id){
     case 'pet-real':
       state.sourceHunt.track = 'pet';
       state.sourceHunt.enabled = { youtube:true, tiktok:true, coupang:false, douyin:false, xhs:false };
-      state.current = 'analysis';
+      state.scriptMode = 'pet-real';
+      state.current = 'script';
       break;
   }
   render();
@@ -4609,7 +4610,10 @@ function sourceResultsPickHtml(items, platform){
             ${(platform||v.platform)==='youtube' ? `<div class="src-meta-extra">프로그램·방영일·회차 정보가 제목/설명에 없어요</div>` : ''}
           `}
         </div>
-        <button type="button" class="src-find-btn" data-find-video-source="${payload}" title="이 쇼츠가 잘라 쓴 방송·롱폼 원본을 찾습니다 (화면 문자·대사·출연자 추정)">영상 소스 찾기</button>
+        <div style="display:flex; flex-direction:column; gap:4px; flex-shrink:0;">
+          ${url ? `<a class="src-find-btn" style="text-decoration:none; text-align:center; background:#DCFCE7; color:#15803D;" href="${escHtml(videoDownloaderUrl(url))}" target="_blank" rel="noopener" title="cobalt.tools 로 mp4 다운로드">💾 다운로드</a>` : ''}
+          <button type="button" class="src-find-btn" data-find-video-source="${payload}" title="이 쇼츠가 잘라 쓴 방송·롱폼 원본을 찾습니다 (화면 문자·대사·출연자 추정)">영상 소스 찾기</button>
+        </div>
       </div>`;
   }).join('')}</div>`;
 }
@@ -4875,42 +4879,144 @@ function crossPlatformHuntHtml(){
   `;
 }
 
+function videoDownloaderUrl(url){
+  // cobalt.tools — 유튜브·틱톡 등 대부분의 영상을 브라우저에서 mp4로 저장
+  return `https://cobalt.tools/?u=${encodeURIComponent(url||'')}`;
+}
+
+const HUNT_PLAT_TABS = [
+  { id:'youtube', icon:'▶️', name:'유튜브',   api:true,  desc:'조회수 상위 쇼핑 영상 · 쇼츠/롱폼/CC' },
+  { id:'tiktok',  icon:'🎵', name:'틱톡',     api:true,  desc:'외국어 소재 검색 (Apify 자동 수집)' },
+  { id:'xhs',     icon:'小', name:'샤오홍슈', api:false, desc:'중국어 후기·새 탭 검색' },
+  { id:'douyin',  icon:'抖', name:'도우인',   api:false, desc:'중국어 숏폼·새 탭 검색' },
+  { id:'a1688',   icon:'🏭', name:'1688',     api:false, desc:'같은 제품 도매 소싱 확인' },
+];
+
+function huntPlatTabUrl(tabId, kw){
+  const zh = looksHangul(kw) ? (translateHuntKwToZh(kw) || kw) : kw;
+  switch(tabId){
+    case 'xhs':    return `https://www.xiaohongshu.com/search_result?keyword=${encodeURIComponent(zh || '种草')}`;
+    case 'douyin': return `https://www.douyin.com/search/${encodeURIComponent(zh || '热门')}`;
+    case 'a1688':  return `https://s.1688.com/selloffer/offer_search.htm?keywords=${encodeURIComponent(zh || '爆款')}`;
+    case 'tiktok': return `https://www.tiktok.com/search?q=${encodeURIComponent(zh || kw || 'fyp')}`;
+    default:       return `https://www.youtube.com/results?search_query=${encodeURIComponent(kw || '쇼핑 쇼츠')}`;
+  }
+}
+
 function renderAnalysis(){
   const needsKey = !state.keys.claudeApiKey && !state.keys.gemini && !state.keys.openaiApiKey;
   const hunt = ensureSourceHunt();
+  hunt.track = 'product'; // Step 2 는 상품 리서치 전용. 반려동물 실사는 Step 4 「반려동물 실사」 탭.
   const period = hunt.period || '7d';
   const kw = hunt.keyword || state.tiktokQuery || state.coupangQuery || '';
   const picks = state.selectedSourceVideos || [];
+  const tab = HUNT_PLAT_TABS.some(t=>t.id===hunt.platTab) ? hunt.platTab : 'youtube';
+  const activeTab = HUNT_PLAT_TABS.find(t=>t.id===tab);
+  const zhPreview = looksHangul(kw) ? (translateHuntKwToZh(kw) || '') : kw;
 
-  // 4가지 핵심 기간만 큰 버튼 · 나머지는 고급 접이식
   const CORE_PERIODS = HUNT_PERIODS.filter(p => ['24h','7d','30d','365d'].includes(p.id));
-  const EXTRA_PERIODS = HUNT_PERIODS.filter(p => !['24h','7d','30d','365d'].includes(p.id));
-
-  const isPet = hunt.track === 'pet';
-  // 영상 소재는 유튜브·틱톡에서만. 쿠팡은 소재가 아니라 「같은 상품 확인」 단계 (아래 별도 카드).
-  const corePlatforms = [
-    {id:'youtube', label:'▶ 유튜브', sub: isPet ? '실사 쇼츠' : '쇼츠·리뷰·CC롱폼'},
-    {id:'tiktok', label:'🎵 틱톡', sub: isPet ? '펫 리액션' : '외국어 소재'},
-  ];
-  const extraPlatforms = [
-    {id:'douyin', label:'抖 도우인', sub:'중국어 · IP 필요'},
-    {id:'xhs', label:'小 샤오홍슈', sub:'중국어 · IP 필요'},
-  ];
-
-  const trackBtn = (id, title, sub) => `
-    <button type="button" class="hunt-track ${hunt.track===id?'active':''}" data-hunt-track="${id}" style="min-height:60px;">
-      <b>${title}</b>
-      <span>${sub}</span>
-    </button>`;
-
-  const platformBtn = (p) => `
-    <button type="button" class="hunt-plat-toggle ${hunt.enabled?.[p.id]?'active':''}" data-hunt-plat-toggle="${p.id}">
-      <span>${p.label}</span>
-      <span class="sub">${p.sub}</span>
-    </button>`;
-
   const periodBtn = (p) => `
     <button type="button" class="hunt-period ${period===p.id?'active':''}" data-hunt-period="${p.id}" title="${escHtml(p.hint)}">${p.label}</button>`;
+
+  const tabBar = `
+    <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px;">
+      ${HUNT_PLAT_TABS.map(t=>`
+        <button type="button" class="hunt-track ${tab===t.id?'active':''}" data-hunt-plat-tab="${t.id}" style="min-height:52px; flex:1; min-width:110px; padding:8px 10px;">
+          <b style="font-size:13px;">${t.icon} ${t.name}</b>
+          <span style="font-size:10.5px;">${t.api?'자동 수집':'새 탭 검색'}</span>
+        </button>
+      `).join('')}
+    </div>`;
+
+  const tabBody = (()=>{
+    if(tab === 'youtube'){
+      return `
+        <div class="field">
+          <label style="font-size:12.5px;">영상 형태</label>
+          <div class="hunt-track-row" style="grid-template-columns:repeat(3,1fr);">
+            <button type="button" class="hunt-track ${(hunt.videoForm||'short')==='short'?'active':''}" data-hunt-video-form="short" style="min-height:52px;">
+              <b>⚡ 쇼츠</b><span>60초 이하 · 트렌드</span>
+            </button>
+            <button type="button" class="hunt-track ${hunt.videoForm==='long'?'active':''}" data-hunt-video-form="long" style="min-height:52px;">
+              <b>🎥 롱폼</b><span>1분 이상 · 원본</span>
+            </button>
+            <button type="button" class="hunt-track ${hunt.videoForm==='cc-long'?'active':''}" data-hunt-video-form="cc-long" style="min-height:52px;">
+              <b>♻️ CC 리믹스</b><span>재사용 허가만</span>
+            </button>
+          </div>
+          ${hunt.videoForm==='cc-long' ? `
+            <div class="settings-note" style="margin-top:6px; font-size:12px;">CC-BY만 검색 — 편집·재업로드 허용, <b>출처 표기 필수</b>. 영상 속 제3자 저작물은 별도 확인.</div>
+          ` : ''}
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <div class="field" style="margin:0;">
+            <label style="font-size:12.5px;">기간</label>
+            <div class="hunt-period-row">${CORE_PERIODS.map(periodBtn).join('')}</div>
+          </div>
+          <div class="field" style="margin:0;">
+            <label style="font-size:12.5px;">결과 개수</label>
+            <div class="hunt-limit-row">
+              ${[10,20,50].map(n=>`<button type="button" class="hunt-limit ${Number(hunt.limit)===n?'active':''}" data-hunt-limit="${n}">${n}개</button>`).join('')}
+            </div>
+          </div>
+        </div>
+        <button type="button" class="btn hunt-search-big" id="huntSearchSelectedBtn" style="margin-top:12px;">🔍 유튜브에서 조회수 상위 검색</button>
+        ${!state.keys.youtubeApiKey ? `<div class="settings-note" style="margin-top:6px; font-size:12px;">YouTube API 키가 없으면 새 탭 검색으로 대체됩니다. <button class="btn secondary" data-nav="settings" style="padding:3px 10px; font-size:11px;">설정</button></div>` : ''}
+        ${statusHtml('hunt-multi')}
+      `;
+    }
+    if(tab === 'tiktok'){
+      return `
+        <label style="display:flex; align-items:center; gap:8px; font-size:12.5px; margin-bottom:10px; cursor:pointer; font-weight:600;">
+          <input type="checkbox" id="tiktokForeignOnly" ${hunt.tiktokForeignOnly!==false?'checked':''}>
+          외국어 소재만 (한국어 제목 제외 · 국내 미노출 소재 확보)
+        </label>
+        ${zhPreview && zhPreview !== kw ? `<div class="ax-meta" style="margin-bottom:8px;">변환 검색어: <b>${escHtml(zhPreview)}</b></div>` : ''}
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <div class="field" style="margin:0;">
+            <label style="font-size:12.5px;">기간 (수집 후 필터)</label>
+            <div class="hunt-period-row">${CORE_PERIODS.map(periodBtn).join('')}</div>
+          </div>
+          <div class="field" style="margin:0;">
+            <label style="font-size:12.5px;">결과 개수</label>
+            <div class="hunt-limit-row">
+              ${[10,20,50].map(n=>`<button type="button" class="hunt-limit ${Number(hunt.limit)===n?'active':''}" data-hunt-limit="${n}">${n}개</button>`).join('')}
+            </div>
+          </div>
+        </div>
+        <button type="button" class="btn hunt-search-big" id="huntSearchSelectedBtn" style="margin-top:12px;">🔍 틱톡에서 검색 (자동 수집)</button>
+        ${!state.keys.apifyToken ? `<div class="settings-note" style="margin-top:6px; font-size:12px;">Apify 토큰이 없으면 새 탭 검색으로 대체됩니다. <button class="btn secondary" data-nav="settings" style="padding:3px 10px; font-size:11px;">설정</button></div>` : ''}
+        ${statusHtml('hunt-multi')}
+      `;
+    }
+    // xhs · douyin · 1688 — 새 탭 검색 전용
+    const labels = { xhs:'샤오홍슈', douyin:'도우인', a1688:'1688' };
+    const notes = {
+      xhs: '중국어 후기·언박싱 벤치마크. 로그인 요구될 수 있음.',
+      douyin: '중국 내수 숏폼. 중국 IP·로그인 제한이 있을 수 있음.',
+      a1688: '같은 제품의 도매 소싱처 확인용. 제품명·이미지로 검색.',
+    };
+    return `
+      <div class="settings-note" style="margin-bottom:10px;">${notes[tab]||''} 한국어 키워드는 <b>중국어로 자동 변환</b>해 엽니다.</div>
+      ${zhPreview ? `<div class="ax-meta" style="margin-bottom:10px;">변환 검색어: <b>${escHtml(zhPreview || '(키워드를 입력하세요)')}</b></div>` : ''}
+      <a class="btn hunt-search-big" style="display:block; text-align:center; text-decoration:none; margin-top:4px;" href="${escHtml(huntPlatTabUrl(tab, kw))}" target="_blank" rel="noopener">
+        🔍 ${labels[tab]||''}에서 새 탭으로 검색
+      </a>
+      <div class="settings-note" style="margin-top:8px; font-size:12px;">찾은 영상/제품은 URL을 복사해 아래 「담은 영상」에 수동으로 추가하거나, 제품명을 확인해 유튜브·틱톡 탭에서 재검색하세요.</div>
+    `;
+  })();
+
+  const crossCheckChips = picks.length ? `
+    <div style="margin:10px 0 4px; font-size:12.5px; font-weight:800; color:var(--text-lo);">교차 확인 (전문가 워크플로우)</div>
+    <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;">
+      <a class="btn secondary" style="font-size:12px; text-decoration:none;" href="${escHtml(huntPlatTabUrl('tiktok', kw || picks[0]?.title || ''))}" target="_blank" rel="noopener">🎵 틱톡에서 같은 제품</a>
+      <a class="btn secondary" style="font-size:12px; text-decoration:none;" href="${escHtml(huntPlatTabUrl('xhs', kw || picks[0]?.title || ''))}" target="_blank" rel="noopener">小 샤오홍슈에서</a>
+      <a class="btn secondary" style="font-size:12px; text-decoration:none;" href="${escHtml(huntPlatTabUrl('douyin', kw || picks[0]?.title || ''))}" target="_blank" rel="noopener">抖 도우인에서</a>
+      <a class="btn secondary" style="font-size:12px; text-decoration:none;" href="${escHtml(huntPlatTabUrl('a1688', kw || picks[0]?.title || ''))}" target="_blank" rel="noopener">🏭 1688 도매 확인</a>
+      <a class="btn secondary" style="font-size:12px; text-decoration:none;" href="https://lens.google.com/" target="_blank" rel="noopener" title="영상 스크린샷을 붙여넣으면 정확한 제품명을 찾아줍니다">🔍 구글 렌즈 (스샷→제품명)</a>
+      <a class="btn secondary" style="font-size:12px; text-decoration:none;" href="https://www.google.com/search?q=${encodeURIComponent(cleanProductTitle(picks[0]?.title||kw||''))}" target="_blank" rel="noopener">G 구글에서 제품명 검색</a>
+    </div>
+  ` : '';
 
   return `
     <div class="stage-header">
@@ -4928,116 +5034,17 @@ function renderAnalysis(){
     ` : ''}
 
     <div class="card">
-      <div class="settings-note" style="margin-bottom:12px; line-height:1.55;">
-        쇼핑쇼츠·리액션 벤치마크 소재를 한 카드에서 찾습니다. 결과에서 담은 영상은 아래 <b>「편집 스튜디오로 보내기」</b> 로 넘겨 실제 편집에 사용할 수 있어요.
+      <div class="settings-note" style="margin-bottom:12px; line-height:1.6;">
+        <b>워크플로우:</b> ① 유튜브에서 조회수 높은 쇼핑 영상 발굴 → ② 틱톡·샤오홍슈·도우인에서 같은 제품 영상 교차 확인 → ③ 구글 렌즈로 정확한 제품명 특정 → ④ 쿠팡에 같은 제품 있는지 확인(파트너스 링크) → ⑤ 다운로드해 재편집.
       </div>
 
       <div class="field">
-        <label>검색어 <span style="color:var(--text-faint); font-weight:500;">(선택 · 비워도 카테고리 기본어로 검색)</span></label>
-        <input type="text" id="huntKeywordInput" value="${escHtml(kw)}" placeholder="예: 무선 미니 가습기 / 강아지 리액션 / 도넛 슬라이서">
+        <label>검색어 / 제품명</label>
+        <input type="text" id="huntKeywordInput" value="${escHtml(kw)}" placeholder="예: 무선 미니 가습기 / 도넛 슬라이서 / folding storage box">
       </div>
 
-      <div class="field">
-        <label style="font-size:12.5px;">트랙</label>
-        <div class="hunt-track-row" style="grid-template-columns:1fr 1fr;">
-          ${trackBtn('product', '🛍 상품 · 쇼핑쇼츠', '리뷰·언박싱·사용 영상')}
-          ${trackBtn('pet', '🐾 반려동물 · 실사 리액션', '강아지·고양이·펫 리액션')}
-        </div>
-      </div>
-
-      <div class="field">
-        <label style="font-size:12.5px;">플랫폼 (여러 개 선택)</label>
-        <div class="hunt-plat-toggles">
-          ${corePlatforms.map(platformBtn).join('')}
-        </div>
-        ${!isPet ? `
-          <label style="display:flex; align-items:center; gap:8px; font-size:12.5px; margin-top:8px; cursor:pointer; font-weight:600;">
-            <input type="checkbox" id="tiktokForeignOnly" ${hunt.tiktokForeignOnly!==false?'checked':''}>
-            틱톡은 외국어 소재만 (한국어 제목 제외 · 국내 미노출 소재 확보)
-          </label>
-        ` : ''}
-      </div>
-
-      <div class="field">
-        <label style="font-size:12.5px;">영상 형태 (유튜브)</label>
-        <div class="hunt-track-row" style="grid-template-columns:repeat(3,1fr);">
-          <button type="button" class="hunt-track ${(hunt.videoForm||'short')==='short'?'active':''}" data-hunt-video-form="short" style="min-height:56px;">
-            <b>⚡ 쇼츠</b>
-            <span>60초 이하 · 벤치마크용</span>
-          </button>
-          <button type="button" class="hunt-track ${hunt.videoForm==='long'?'active':''}" data-hunt-video-form="long" style="min-height:56px;">
-            <b>🎥 롱폼</b>
-            <span>1분 이상 · 원본 소재</span>
-          </button>
-          <button type="button" class="hunt-track ${hunt.videoForm==='cc-long'?'active':''}" data-hunt-video-form="cc-long" style="min-height:56px;">
-            <b>♻️ CC 리믹스 롱폼</b>
-            <span>재사용 허가 라이선스만</span>
-          </button>
-        </div>
-        ${hunt.videoForm==='cc-long' ? `
-          <div class="settings-note" style="margin-top:6px; font-size:12px; line-height:1.5;">
-            <b>크리에이티브 커먼즈(CC-BY)</b> 영상만 검색합니다. 편집·재업로드가 허용되지만 <b>원저작자 출처 표기</b>는 필요하고,
-            영상 안에 제3자 저작물(음악·방송장면)이 섞여 있을 수 있으니 확인 후 사용하세요.
-          </div>
-        ` : ''}
-      </div>
-
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:6px;">
-        <div class="field" style="margin:0;">
-          <label style="font-size:12.5px;">기간</label>
-          <div class="hunt-period-row">${CORE_PERIODS.map(periodBtn).join('')}</div>
-        </div>
-        <div class="field" style="margin:0;">
-          <label style="font-size:12.5px;">결과 개수</label>
-          <div class="hunt-limit-row">
-            ${[10,20,50].map(n=>`<button type="button" class="hunt-limit ${Number(hunt.limit)===n?'active':''}" data-hunt-limit="${n}">${n}개</button>`).join('')}
-          </div>
-        </div>
-      </div>
-
-      <button type="button" class="btn hunt-search-big" id="huntSearchSelectedBtn" style="margin-top:12px;">🔍 검색하기</button>
-      ${statusHtml('hunt-multi')}
-
-      <details style="margin-top:14px;">
-        <summary style="cursor:pointer; font-size:12.5px; font-weight:700; color:var(--text-lo);">🛠 고급 · 중국 사이트 · 확장 기간 · 이미지 참고</summary>
-        <div style="padding-top:10px; display:grid; gap:10px;">
-          <div class="field" style="margin:0;">
-            <label style="font-size:12px;">추가 플랫폼 (중국어 · 로그인/IP 필요)</label>
-            <div class="hunt-plat-toggles">
-              ${extraPlatforms.map(platformBtn).join('')}
-            </div>
-          </div>
-          <div class="field" style="margin:0;">
-            <label style="font-size:12px;">확장 기간</label>
-            <div class="hunt-period-row">${EXTRA_PERIODS.map(periodBtn).join('')}</div>
-          </div>
-          <div class="field" style="margin:0;">
-            <label style="font-size:12px;">중국 사이트용 중국어 검색어</label>
-            <input type="text" id="douyinQueryInput" placeholder="예: 加湿器 测评 / 明星同款" value="${escHtml(state.douyinQuery || buildHuntQuery(kw, 'douyin'))}">
-            <input type="text" id="xhsQueryInput" placeholder="예: 好物 种草 / 开箱 测评" value="${escHtml(state.xhsQuery || buildHuntQuery(kw, 'xhs'))}" style="margin-top:6px;">
-            <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;">
-              <button class="btn secondary" id="douyinSearchBtn" type="button" style="font-size:12px;">🔍 도우인 새 탭</button>
-              <button class="btn secondary" id="xhsSearchBtn" type="button" style="font-size:12px;">🔍 샤오홍슈 새 탭</button>
-            </div>
-          </div>
-          <div class="field" style="margin:0;">
-            <label style="font-size:12px;">참고 이미지 (보조)</label>
-            <div class="img-pick-grid" id="imgGrid">
-              ${state.productImages.map((img,i)=>`
-                <button type="button" class="img-pick" data-preview-img="${i}" title="크게 보기">
-                  <span class="tag" data-remove-img="${i}" title="삭제">✕</span>
-                  <img src="data:${img.mime};base64,${img.b64}" alt="" draggable="false">
-                  <span class="img-pick-zoom">크게</span>
-                </button>
-              `).join('')}
-              <div class="img-pick upload-zone" id="uploadZone" title="이미지 추가">
-                <div style="font-size:13px; line-height:1.45;">+ 이미지 추가<div class="hint">정면·측면·사용컷</div></div>
-              </div>
-            </div>
-            <input type="file" id="fileInput" accept="image/*" multiple style="display:none;">
-          </div>
-        </div>
-      </details>
+      ${tabBar}
+      ${tabBody}
     </div>
 
     ${huntShortsBoardHtml()}
@@ -5052,6 +5059,7 @@ function renderAnalysis(){
             return `<button type="button" class="ax-chip" data-remove-source-video="${i}" title="${escHtml(v.title||'')}">${escHtml(label)}</button>`;
           }).join('')}
         </div>
+        ${crossCheckChips}
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
           <button type="button" class="btn" id="sendPicksToStudioBtn" style="padding:12px; font-weight:800;">
             🎬 편집 스튜디오로 보내기
@@ -5061,79 +5069,76 @@ function renderAnalysis(){
           </button>
         </div>
         <div class="settings-note" style="margin-top:8px; font-size:12px;">
-          유튜브·틱톡은 브라우저에서 직접 편집이 안 되므로 <b>참조 링크</b>로 저장돼요. 스튜디오에서 「💾 다운로드 도우미」로 mp4를 저장한 뒤 업로드하세요.
-          쿠팡 확인은 파트너스 링크·가격·스펙 확보용입니다.
+          각 결과의 「💾」 버튼이나 스튜디오의 다운로드 도우미로 mp4를 저장한 뒤, 스튜디오 소재 업로드에 넣으면 자동으로 매칭됩니다.
         </div>
       </div>
     ` : ''}
 
-    ${!isPet ? `
-      <details class="card" style="padding:0;" ${state.coupangAccordionOpen?'open':''}>
-        <summary style="cursor:pointer; padding:14px 18px; font-weight:800; font-size:14px;">
-          🛒 쿠팡 상품 확인 · 정보 분석 (선택 · 파트너스 링크/대본용)
-        </summary>
-        <div style="padding:0 18px 18px;">
-          <div class="settings-note" style="margin-bottom:10px;">쿠팡 상품을 불러오거나 리뷰·설명을 넣으면 상품별 특징을 뽑아 대본 카피에 반영합니다. 필수는 아니에요.</div>
-          <div class="field">
-            <label>쿠팡 상품 제목 / 키워드</label>
-            <textarea id="coupangQueryInput" rows="2" placeholder="예: 탐사 프리미엄 100% 천연펄프 3겹 롤화장지">${escHtml(state.coupangQuery || kw)}</textarea>
-          </div>
-          <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
-            <button class="btn secondary" id="coupangSearchBtn" type="button">🔍 쿠팡 상품 검색</button>
-            <button class="btn secondary" id="coupangPasteSearchBtn" type="button">📋 붙여넣고 검색</button>
-          </div>
-          ${statusHtml('coupang-search')}
-          ${state.selectedCoupang ? `
-            <div style="margin-top:12px; padding:12px; background:#F4F8FF; border:1px solid #C7D7F5; border-radius:10px;">
-              <div style="display:flex; gap:14px; align-items:flex-start;">
-                ${state.selectedCoupang.image ? `<img src="${state.selectedCoupang.image}" alt="" style="width:72px; height:72px; object-fit:contain; background:#fff; border-radius:8px; border:1px solid var(--border); flex-shrink:0;">` : ''}
-                <div style="min-width:0; flex:1;">
-                  <div style="font-weight:800; font-size:13px; margin-bottom:4px;">${escHtml(state.selectedCoupang.name)}</div>
-                  <div style="font-size:12px; color:var(--text-lo);">
-                    ${state.selectedCoupang.price != null ? state.selectedCoupang.price.toLocaleString()+'원' : ''}
-                    ${state.selectedCoupang.isRocket ? ' · 로켓배송' : ''}
-                    ${state.selectedCoupang.isFreeShipping ? ' · 무료배송' : ''}
-                  </div>
-                </div>
-              </div>
-              <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:10px;">
-                <button class="btn" id="analyzeCoupangBtn" type="button" style="font-size:12px;">🔬 상품 정보 분석</button>
-                <button class="btn secondary" id="analyzeCoupangDeepBtn" type="button" style="font-size:12px;">🔬 + 조회수 벤치</button>
-              </div>
-              ${statusHtml('coupang-analysis')}
-            </div>
-          ` : ''}
-          ${state.coupangResults?.length ? `
-            <div style="margin-top:12px; display:flex; flex-direction:column; gap:8px;">
-              ${state.coupangResults.map((p,i)=>`
-                <div style="display:flex; gap:10px; padding:8px; border:1px solid ${state.selectedCoupang?.productId===p.productId?'var(--violet)':'var(--border)'}; border-radius:8px; background:#fff;">
-                  <img src="${p.image||''}" alt="" style="width:56px; height:56px; object-fit:contain; background:#F7F9FC; border-radius:6px; flex-shrink:0;">
-                  <div style="min-width:0; flex:1;">
-                    <div style="font-size:12px; font-weight:700; line-height:1.35; margin-bottom:2px;">${escHtml(p.name)}</div>
-                    <div style="font-size:11px; color:var(--text-lo); margin-bottom:6px;">${p.price!=null?p.price.toLocaleString()+'원':''}${p.matchScore!=null?' · 일치 '+Math.round(p.matchScore)+'%':''}</div>
-                    <div style="display:flex; gap:6px; flex-wrap:wrap;">
-                      <button class="btn" data-use-coupang="${i}" type="button" style="padding:5px 10px; font-size:11px;">불러오기</button>
-                      <button class="btn secondary" data-use-coupang-analyze="${i}" type="button" style="padding:5px 10px; font-size:11px;">불러오고 분석</button>
-                    </div>
-                  </div>
-                </div>
-              `).join('')}
-            </div>
-          ` : ''}
-          <div class="field" style="margin-top:14px;">
-            <label>리뷰/정보 붙여넣기</label>
-            <textarea id="reviewText" rows="3" placeholder="예: 국물이 진짜 깊고 얼큰해서 재구매합니다...">${escHtml(state.reviewText||'')}</textarea>
-          </div>
-          <div class="field">
-            <label>제품 설명 (선택)</label>
-            <textarea id="productDesc" rows="2" placeholder="예: OOO 무선 미니 가습기, 400ml...">${escHtml(state.productDescription||'')}</textarea>
-          </div>
-          <button class="btn" id="analyzeBtn">상품 정보 분석하기</button>
-          ${statusHtml('analysis')}
-          ${state.analysis ? analysisReportHtml(state.analysis) : ''}
+    <details class="card" style="padding:0;" ${state.coupangAccordionOpen?'open':''}>
+      <summary style="cursor:pointer; padding:14px 18px; font-weight:800; font-size:14px;">
+        🛒 쿠팡 상품 확인 · 정보 분석 (선택 · 파트너스 링크/대본용)
+      </summary>
+      <div style="padding:0 18px 18px;">
+        <div class="settings-note" style="margin-bottom:10px;">쿠팡 상품을 불러오거나 리뷰·설명을 넣으면 상품별 특징을 뽑아 대본 카피에 반영합니다. 필수는 아니에요.</div>
+        <div class="field">
+          <label>쿠팡 상품 제목 / 키워드</label>
+          <textarea id="coupangQueryInput" rows="2" placeholder="예: 탐사 프리미엄 100% 천연펄프 3겹 롤화장지">${escHtml(state.coupangQuery || kw)}</textarea>
         </div>
-      </details>
-    ` : ''}
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
+          <button class="btn secondary" id="coupangSearchBtn" type="button">🔍 쿠팡 상품 검색</button>
+          <button class="btn secondary" id="coupangPasteSearchBtn" type="button">📋 붙여넣고 검색</button>
+        </div>
+        ${statusHtml('coupang-search')}
+        ${state.selectedCoupang ? `
+          <div style="margin-top:12px; padding:12px; background:#F4F8FF; border:1px solid #C7D7F5; border-radius:10px;">
+            <div style="display:flex; gap:14px; align-items:flex-start;">
+              ${state.selectedCoupang.image ? `<img src="${state.selectedCoupang.image}" alt="" style="width:72px; height:72px; object-fit:contain; background:#fff; border-radius:8px; border:1px solid var(--border); flex-shrink:0;">` : ''}
+              <div style="min-width:0; flex:1;">
+                <div style="font-weight:800; font-size:13px; margin-bottom:4px;">${escHtml(state.selectedCoupang.name)}</div>
+                <div style="font-size:12px; color:var(--text-lo);">
+                  ${state.selectedCoupang.price != null ? state.selectedCoupang.price.toLocaleString()+'원' : ''}
+                  ${state.selectedCoupang.isRocket ? ' · 로켓배송' : ''}
+                  ${state.selectedCoupang.isFreeShipping ? ' · 무료배송' : ''}
+                </div>
+              </div>
+            </div>
+            <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:10px;">
+              <button class="btn" id="analyzeCoupangBtn" type="button" style="font-size:12px;">🔬 상품 정보 분석</button>
+              <button class="btn secondary" id="analyzeCoupangDeepBtn" type="button" style="font-size:12px;">🔬 + 조회수 벤치</button>
+            </div>
+            ${statusHtml('coupang-analysis')}
+          </div>
+        ` : ''}
+        ${state.coupangResults?.length ? `
+          <div style="margin-top:12px; display:flex; flex-direction:column; gap:8px;">
+            ${state.coupangResults.map((p,i)=>`
+              <div style="display:flex; gap:10px; padding:8px; border:1px solid ${state.selectedCoupang?.productId===p.productId?'var(--violet)':'var(--border)'}; border-radius:8px; background:#fff;">
+                <img src="${p.image||''}" alt="" style="width:56px; height:56px; object-fit:contain; background:#F7F9FC; border-radius:6px; flex-shrink:0;">
+                <div style="min-width:0; flex:1;">
+                  <div style="font-size:12px; font-weight:700; line-height:1.35; margin-bottom:2px;">${escHtml(p.name)}</div>
+                  <div style="font-size:11px; color:var(--text-lo); margin-bottom:6px;">${p.price!=null?p.price.toLocaleString()+'원':''}${p.matchScore!=null?' · 일치 '+Math.round(p.matchScore)+'%':''}</div>
+                  <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                    <button class="btn" data-use-coupang="${i}" type="button" style="padding:5px 10px; font-size:11px;">불러오기</button>
+                    <button class="btn secondary" data-use-coupang-analyze="${i}" type="button" style="padding:5px 10px; font-size:11px;">불러오고 분석</button>
+                  </div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
+        <div class="field" style="margin-top:14px;">
+          <label>리뷰/정보 붙여넣기</label>
+          <textarea id="reviewText" rows="3" placeholder="예: 국물이 진짜 깊고 얼큰해서 재구매합니다...">${escHtml(state.reviewText||'')}</textarea>
+        </div>
+        <div class="field">
+          <label>제품 설명 (선택)</label>
+          <textarea id="productDesc" rows="2" placeholder="예: OOO 무선 미니 가습기, 400ml...">${escHtml(state.productDescription||'')}</textarea>
+        </div>
+        <button class="btn" id="analyzeBtn">상품 정보 분석하기</button>
+        ${statusHtml('analysis')}
+        ${state.analysis ? analysisReportHtml(state.analysis) : ''}
+      </div>
+    </details>
 
     ${navRow('settings', 'script', '다음: 기획+대본 →')}
   `;
@@ -5403,11 +5408,63 @@ function renderScript(){
     <div class="card" style="margin-bottom:16px;">
       <div class="row" style="gap:8px;">
         <button class="btn ${mode==='product'?'':'secondary'}" data-set-script-mode="product" style="flex:1;">🛍 제품 홍보 영상</button>
-        <button class="btn ${mode==='story'?'':'secondary'}" data-set-script-mode="story" style="flex:1;">🎬 스토리로 만들기 (미니 영화)</button>
+        <button class="btn ${mode==='story'?'':'secondary'}" data-set-script-mode="story" style="flex:1;">🎬 스토리 (미니 영화)</button>
+        <button class="btn ${mode==='pet-real'?'':'secondary'}" data-set-script-mode="pet-real" style="flex:1;">🐾 반려동물 실사</button>
       </div>
     </div>
 
-    ${mode==='product' ? `
+    ${mode==='pet-real' ? (function(){
+      const hunt = ensureSourceHunt();
+      hunt.track = 'pet';
+      if(!hunt.enabled.youtube && !hunt.enabled.tiktok){ hunt.enabled.youtube = true; hunt.enabled.tiktok = true; }
+      const picks = state.selectedSourceVideos || [];
+      const CORE_PERIODS = HUNT_PERIODS.filter(p => ['24h','7d','30d','365d'].includes(p.id));
+      return `
+        <div class="card">
+          <div class="settings-note" style="margin-bottom:12px; line-height:1.55;">
+            실제 반려동물 리액션 영상을 찾아 <b>재편집</b>합니다. AI 생성 없이 다운로드 → 자막·컷 편집으로 완성해요.
+          </div>
+          <div class="field">
+            <label>검색어 <span style="color:var(--text-faint); font-weight:500;">(비우면 「반려동물 쇼츠」)</span></label>
+            <input type="text" id="huntKeywordInput" value="${escHtml(hunt.keyword||'')}" placeholder="예: 강아지 리액션 / cat prank / puppy shorts">
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+            <div class="field" style="margin:0;">
+              <label style="font-size:12.5px;">플랫폼</label>
+              <div class="hunt-plat-toggles">
+                ${[{id:'youtube',label:'▶ 유튜브',sub:'실사 쇼츠'},{id:'tiktok',label:'🎵 틱톡',sub:'펫 리액션'}].map(p=>`
+                  <button type="button" class="hunt-plat-toggle ${hunt.enabled?.[p.id]?'active':''}" data-hunt-plat-toggle="${p.id}">
+                    <span>${p.label}</span><span class="sub">${p.sub}</span>
+                  </button>`).join('')}
+              </div>
+            </div>
+            <div class="field" style="margin:0;">
+              <label style="font-size:12.5px;">기간</label>
+              <div class="hunt-period-row">${CORE_PERIODS.map(p=>`
+                <button type="button" class="hunt-period ${(hunt.period||'7d')===p.id?'active':''}" data-hunt-period="${p.id}">${p.label}</button>`).join('')}</div>
+            </div>
+          </div>
+          <button type="button" class="btn hunt-search-big" id="huntSearchSelectedBtn" style="margin-top:12px;">🔍 검색하기</button>
+          ${statusHtml('hunt-multi')}
+        </div>
+
+        ${huntShortsBoardHtml()}
+
+        ${picks.length ? `
+          <div class="card" style="border:1.5px solid #A9C6FA;">
+            <h3>담은 영상 ${picks.length}개</h3>
+            <div class="ax-chips" style="margin-bottom:10px;">
+              ${picks.map((v,i)=>{
+                const label = (v.platform||'')+' · '+(v.title||'').slice(0,28);
+                return `<button type="button" class="ax-chip" data-remove-source-video="${i}" title="${escHtml(v.title||'')}">${escHtml(label)}</button>`;
+              }).join('')}
+            </div>
+            <button type="button" class="btn" id="sendPicksToStudioBtn" style="width:100%; padding:12px; font-weight:800;">🎬 편집 스튜디오로 보내기</button>
+            <div class="settings-note" style="margin-top:8px; font-size:12px;">각 결과의 「💾」 버튼으로 mp4를 저장한 뒤 스튜디오 소재 업로드에 넣으면 자동 매칭됩니다.</div>
+          </div>
+        ` : ''}
+      `;
+    })() : mode==='product' ? `
       <div class="card" style="margin-bottom:12px;">
         <div class="field" style="margin:0;">
           <label style="font-size:13px;">카테고리 (대본·검색 전략)</label>
@@ -9476,6 +9533,17 @@ document.addEventListener('click', async (e)=>{
     }else{
       hunt.enabled = { youtube:false, tiktok:true, coupang:true, douyin:false, xhs:false };
     }
+    render();
+    return;
+  }
+
+  // 플랫폼 탭 (유튜브/틱톡/샤오홍슈/도우인/1688)
+  const platTabEl = e.target.closest?.('[data-hunt-plat-tab]');
+  if(platTabEl?.dataset.huntPlatTab){
+    const hunt = syncHuntKeywordFromInputs();
+    hunt.platTab = platTabEl.dataset.huntPlatTab;
+    // 검색은 활성 탭 플랫폼만 실행
+    hunt.enabled = { youtube: hunt.platTab==='youtube', tiktok: hunt.platTab==='tiktok', coupang:false, douyin:false, xhs:false };
     render();
     return;
   }
