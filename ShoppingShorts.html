@@ -2900,6 +2900,7 @@ async function launchTemplate(templateId){
     }
   }
 
+  state.launchedFromHome = true; // 홈 카드로 시작한 흐름 — Step 2/4 진입 시 홈 안내 배너 숨김
   // 고급 옵션 → state 반영 (최적 기본값 우선 · 사용자가 바꾼 값 존중)
   state.t2vMode = adv.genMode === 'fast';
   state.maxTotalDuration = Math.max(5, Math.min(60, Number(adv.totalDur) || (templateId==='story-cinema'?20:15)));
@@ -2955,6 +2956,16 @@ async function launchTemplate(templateId){
     state.templateRunning = null;
     setStatus('tpl-run','err', err?.message || String(err));
   }
+}
+
+/** 홈 카드를 거치지 않고 사이드바로 바로 들어온 경우, 더 빠른 홈 흐름을 안내 (수동 진행은 계속 가능) */
+function homeNudgeBannerHtml(){
+  if(state.launchedFromHome) return '';
+  return `
+    <div class="banner" style="background:#F1F5FD; border-color:#C7D7F5; color:#2955C8;">
+      <span>💡 폼 하나로 자동 생성하려면 <b>홈</b>의 템플릿 카드가 더 빠르고 간단해요. 이 화면은 세부 옵션을 직접 조정하는 수동 모드예요.</span>
+      <button class="btn secondary" data-nav="home">🏠 홈에서 시작하기</button>
+    </div>`;
 }
 
 function activePresetBadgeHtml(){
@@ -3032,6 +3043,7 @@ function launchPreset(id){
   const preset = HOME_PRESETS.find(p=>p.id===id);
   if(!preset) return;
   // 공통 초기화 — 잔여 값이 다른 프리셋에 새어들어가지 않게.
+  state.launchedFromHome = true;
   state.activePreset = id;
   state.scriptMode = 'product';
   state.selectedStoryPlan = null;
@@ -5069,6 +5081,7 @@ function renderAnalysis(){
         <div class="stage-title">영상 소재 리서치</div>
       </div>
 
+      ${homeNudgeBannerHtml()}
       ${activePresetBadgeHtml()}
 
       ${needsKey ? `
@@ -5455,6 +5468,7 @@ function renderScript(){
       <div class="stage-title">기획 + 대본</div>
     </div>
 
+    ${homeNudgeBannerHtml()}
     ${activePresetBadgeHtml()}
 
     <div class="card" style="margin-bottom:16px;">
