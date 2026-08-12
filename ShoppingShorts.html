@@ -7255,27 +7255,41 @@ async function addSourcesToTimelineSequential(indices){
 const MAX_VIRAL_AUTO = 8; // 바이럴 자동 편집 동시 처리 상한
 
 const SHORTS_TEMPLATES = [
-  { id:'cover',    icon:'🔳', label:'꽉 채움',      desc:'9:16 가득 크롭 · 쇼츠 표준' },
-  { id:'pad',      icon:'⬛', label:'전체 보기',    desc:'원본 비율 유지 · 검정 여백' },
-  { id:'blur',     icon:'🌫️', label:'블러 배경',    desc:'원본 유지 + 흐린 배경 채움' },
-  { id:'titlebar', icon:'🏷️', label:'상단 제목바',  desc:'위 제목 밴드 + 하단 자막' },
-  { id:'meme',     icon:'💥', label:'밈 스타일',    desc:'큰 노란 제목 + 꽉 채움' },
+  { id:'cover',     icon:'🔳', label:'꽉 채움',     desc:'9:16 가득 크롭 · 쇼츠 표준', hasTitle:false },
+  { id:'pad',       icon:'⬛', label:'전체 보기',   desc:'원본 비율 유지 · 검정 여백', hasTitle:false },
+  { id:'blur',      icon:'🌫️', label:'블러 배경',   desc:'원본 유지 + 흐린 배경 채움', hasTitle:false },
+  { id:'titlebar',  icon:'🏷️', label:'상단 제목바', desc:'위 제목 밴드 + 하단 자막', hasTitle:true },
+  { id:'bottombar', icon:'📌', label:'하단 제목',   desc:'아래쪽 제목 밴드 · 화면 위주', hasTitle:true },
+  { id:'sandwich',  icon:'🥪', label:'상하 밴드',   desc:'위 제목 + 아래 자막 밴드 · 정보형', hasTitle:true },
+  { id:'meme',      icon:'💥', label:'밈 스타일',   desc:'큰 노란 제목 + 꽉 채움', hasTitle:true },
+  { id:'subfocus',  icon:'💬', label:'자막 강조',   desc:'제목 없이 큰 자막 · 나레이션 중심', hasTitle:false },
 ];
 
 function applyShortsTemplate(id){
   const t = SHORTS_TEMPLATES.find(x=>x.id===id);
   if(!t) return;
   state.shortsTemplate = id;
-  state.videoFitMode = (id==='cover'||id==='meme') ? 'cover' : id==='blur' ? 'blur' : 'pad';
+  state.videoFitMode =
+    (id==='cover'||id==='meme'||id==='subfocus') ? 'cover'
+    : id==='blur' ? 'blur'
+    : 'pad';
   // 자막 기본 스타일
-  state.subStyle = { ...state.subStyle, position:'bottom', y:88, bold:true };
+  state.subStyle = { ...state.subStyle, position:'bottom', y:88, bold:true, bg:false };
   if(id==='titlebar'){
     state.titleStyle = { ...state.titleStyle, fontSize:30, color:'#FFFFFF', bg:true, bgColor:'#111827', position:'top', y:8, bold:true, fontFamily:'Noto Sans KR', glow:false, outlineWidth:0 };
+  }else if(id==='bottombar'){
+    state.titleStyle = { ...state.titleStyle, fontSize:28, color:'#FFFFFF', bg:true, bgColor:'#1D4ED8', position:'bottom', y:72, bold:true, fontFamily:'Noto Sans KR', glow:false, outlineWidth:0 };
+    state.subStyle = { ...state.subStyle, y:90 };
+  }else if(id==='sandwich'){
+    state.titleStyle = { ...state.titleStyle, fontSize:28, color:'#FFFFFF', bg:true, bgColor:'#111827', position:'top', y:7, bold:true, fontFamily:'Noto Sans KR', glow:false, outlineWidth:0 };
+    state.subStyle = { ...state.subStyle, bg:true, bgColor:'#111827', color:'#FFFFFF', y:90 };
   }else if(id==='meme'){
     state.titleStyle = { ...state.titleStyle, fontSize:36, color:'#FFE400', bg:false, position:'top', y:10, bold:true, fontFamily:'Black Han Sans', glow:true, outlineWidth:4, outline:'#000000' };
+  }else if(id==='subfocus'){
+    state.subStyle = { ...state.subStyle, fontSize:26, bold:true, glow:true, outlineWidth:3, y:82 };
   }
   // 제목 템플릿은 제목 자막 줄을 보장
-  if(id==='titlebar' || id==='meme'){
+  if(t.hasTitle){
     const totalDur = Math.max(5, getTimelineContentDuration() || 15);
     const hasTitle = (state.subtitles||[]).some(s => s.kind === 'title');
     if(!hasTitle){
@@ -8014,7 +8028,7 @@ function renderManualAssembly(){
           ` : ''}
 
           <div class="vp-panel-title" style="margin-top:6px;"><div>쇼츠 템플릿</div></div>
-          <div style="display:grid; grid-template-columns:repeat(5,1fr); gap:4px; margin-bottom:8px;">
+          <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:4px; margin-bottom:6px;">
             ${SHORTS_TEMPLATES.map(t=>`
               <button type="button" class="vp-mini ${state.shortsTemplate===t.id?'go':''}" data-shorts-template="${t.id}" title="${escHtml(t.desc)}" style="display:flex; flex-direction:column; gap:2px; padding:6px 2px; height:auto; line-height:1.2;">
                 <span style="font-size:15px;">${t.icon}</span>
@@ -8022,6 +8036,27 @@ function renderManualAssembly(){
               </button>
             `).join('')}
           </div>
+          <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:4px; margin-bottom:8px; font-size:9.5px; text-align:center; color:var(--text-lo);">
+            <label style="cursor:pointer;">제목<br><input type="color" data-tpl-color="titleColor" value="${escHtml(state.titleStyle?.color||'#FFE400')}" style="width:100%; height:22px; border:none; padding:0; cursor:pointer;"></label>
+            <label style="cursor:pointer;">제목배경<br><input type="color" data-tpl-color="titleBg" value="${escHtml(state.titleStyle?.bgColor||'#111827')}" style="width:100%; height:22px; border:none; padding:0; cursor:pointer;"></label>
+            <label style="cursor:pointer;">자막<br><input type="color" data-tpl-color="subColor" value="${escHtml(state.subStyle?.color||'#FFFFFF')}" style="width:100%; height:22px; border:none; padding:0; cursor:pointer;"></label>
+            <label style="cursor:pointer;">자막테두리<br><input type="color" data-tpl-color="subOutline" value="${escHtml(state.subStyle?.outline||'#000000')}" style="width:100%; height:22px; border:none; padding:0; cursor:pointer;"></label>
+          </div>
+
+          <div class="vp-panel-title" style="margin-top:4px;"><div>원본 자막 지우기 <span style="font-weight:400; font-size:9px;">(내보내기에 적용)</span></div></div>
+          <div style="display:flex; gap:4px; margin-bottom:4px;">
+            ${[['none','안 함'],['crop','하단 크롭'],['blur','하단 블러']].map(([m,l])=>`
+              <button type="button" class="vp-mini ${ (state.subErase?.mode||'none')===m?'go':''}" data-sub-erase-mode="${m}" style="flex:1;">${l}</button>
+            `).join('')}
+          </div>
+          ${(state.subErase?.mode||'none')!=='none' ? `
+            <div style="display:flex; align-items:center; gap:6px; margin-bottom:8px; font-size:10px; color:var(--text-lo);">
+              <span>높이</span>
+              <input type="range" min="8" max="35" step="1" value="${Math.round((state.subErase?.height||0.18)*100)}" data-sub-erase-height style="flex:1;">
+              <b>${Math.round((state.subErase?.height||0.18)*100)}%</b>
+            </div>
+            <div class="settings-note" style="margin:0 0 8px; font-size:10px;">다운로드한 영상 하단에 박힌 자막·워터마크를 ${state.subErase?.mode==='crop'?'잘라내고 화면을 채웁니다':'블러로 가립니다'}. 미리보기에는 표시되지 않고 내보내기에 적용돼요.</div>
+          ` : ''}
 
           ${(state.sourceEDL||[]).length ? `
             <button class="vp-btn tool accent block" id="autoScriptFromEdlBtn" type="button" style="margin-bottom:8px;" title="타임라인 클립에 맞춰 끝까지 보게 만드는 나레이션을 생성합니다">🎙 끝까지 보게 하는 대본 뽑기</button>
@@ -8122,6 +8157,8 @@ function renderManualAssembly(){
               </div>`).join('') : `<div class="vp-empty">자막이 없어요</div>`}
           </div>
           <button class="vp-btn block" id="downloadSrtBtn" type="button" ${!state.subtitles?.length?'disabled':''}>💾 .srt 저장</button>
+          <button class="vp-btn block" id="copyScriptForCapcutBtn" type="button" style="margin-top:6px;" title="타임라인 대본을 복사해 캡컷 「텍스트 음성 변환」에 붙여넣기">📋 대본 복사 (캡컷 TTS용)</button>
+          <div class="settings-note" style="margin-top:4px; font-size:10px;">캡컷 워크플로우: 여기서 무음 영상+.srt 내보내기 → 캡컷에서 자막 가져오기 + TTS 음성 생성.</div>
         ` : ''}
 
         ${panel==='audio' ? `
@@ -11232,6 +11269,22 @@ document.addEventListener('click', async (e)=>{
     return;
   }
 
+  const eraseModeEl = e.target.closest?.('[data-sub-erase-mode]');
+  if(eraseModeEl?.dataset.subEraseMode){
+    state.subErase = { ...(state.subErase||{height:0.18}), mode: eraseModeEl.dataset.subEraseMode };
+    render();
+    return;
+  }
+
+  if(e.target.id === 'copyScriptForCapcutBtn'){
+    const lines = (state.sourceEDL||[]).map(e2=>String(e2.line||'').trim()).filter(Boolean);
+    const text = lines.length ? lines.join('\n') : String(state.sourceScript||'').trim();
+    if(!text){ setStatus('auto-script','err','복사할 대본이 없어요. 먼저 「🎙 대본 뽑기」를 실행하세요.'); return; }
+    try{ await navigator.clipboard.writeText(text); setStatus('auto-script','ok','대본 복사됨 — 캡컷 「텍스트 → 텍스트 음성 변환」에 붙여넣으세요.'); }
+    catch(_){ window.prompt('복사하세요 (캡컷 TTS용):', text); }
+    return;
+  }
+
   if(e.target.id === 'viralAutoEditBtn' || e.target.id === 'aiViralAutoEditBtn'){
     const useAi = e.target.id === 'aiViralAutoEditBtn';
     let idxs = (state.selectedSourceIndices||[]).slice().sort((a,b)=>a-b);
@@ -12541,6 +12594,21 @@ document.addEventListener('change', async (e)=>{
   }
   if(e.target.id === 'tiktokForeignOnly'){
     ensureSourceHunt().tiktokForeignOnly = !!e.target.checked;
+    return;
+  }
+  const tplColor = e.target?.dataset?.tplColor;
+  if(tplColor){
+    const v = e.target.value;
+    if(tplColor === 'titleColor') state.titleStyle = { ...state.titleStyle, color:v };
+    else if(tplColor === 'titleBg') state.titleStyle = { ...state.titleStyle, bgColor:v, bg:true };
+    else if(tplColor === 'subColor') state.subStyle = { ...state.subStyle, color:v };
+    else if(tplColor === 'subOutline') state.subStyle = { ...state.subStyle, outline:v };
+    render();
+    return;
+  }
+  if(e.target?.dataset?.subEraseHeight !== undefined){
+    state.subErase = { ...(state.subErase||{mode:'crop'}), height: Math.max(0.08, Math.min(0.35, Number(e.target.value)/100 || 0.18)) };
+    render();
     return;
   }
   if(e.target.id === 'prodManualScriptText'){
@@ -14377,9 +14445,17 @@ async function assembleFromSources(onProgress){
         ? [`split=2[bgx][fgx];[bgx]scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},boxblur=22:2[bgo];[fgx]scale=${W}:${H}:force_original_aspect_ratio=decrease[fgo];[bgo][fgo]overlay=(W-w)/2:(H-h)/2`, 'setsar=1']
         : [`scale=${W}:${H}:force_original_aspect_ratio=decrease`,
            `pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:black`, 'setsar=1'];
+    // 원본에 박힌 자막·워터마크 제거 (하단 밴드) — 화면 맞춤 전에 적용
+    const er = state.subErase || {};
+    const eh = Math.max(0.08, Math.min(0.35, Number(er.height) || 0.18));
+    const eraseChain = er.mode === 'crop'
+      ? [`crop=iw:ih*${(1-eh).toFixed(3)}:0:0`]
+      : er.mode === 'blur'
+        ? [`split=2[ebase][esub];[esub]crop=iw:ih*${eh.toFixed(3)}:0:ih*${(1-eh).toFixed(3)},boxblur=16:2[eblur];[ebase][eblur]overlay=0:H-h`]
+        : [];
     const chain = isOverlay
       ? [`scale=${Math.round(W*(seg.ovScale ?? 0.4))}:-2`, 'setsar=1']   // 오버레이는 축소만
-      : baseFit;
+      : [...eraseChain, ...baseFit];
 
     // 색보정 (밝기·대비·채도·감마)
     const br = seg.brightness ?? 0, ct = seg.contrast ?? 1;
