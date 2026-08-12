@@ -1639,6 +1639,19 @@
   }
   .vp-clip.at-play .vp-clip-now{display:block;}
   .vp-timeline-wrap.tl-sm .vp-clip-now{display:none;}
+  .vp-clip-edge{
+    position:absolute; top:0; bottom:0; width:9px; z-index:4; cursor:ew-resize;
+    background:transparent;
+  }
+  .vp-clip-edge.left{ left:0; border-radius:6px 0 0 6px; }
+  .vp-clip-edge.right{ right:0; border-radius:0 6px 6px 0; }
+  .vp-clip-edge:hover, .vp-clip-edge:active{ background:rgba(37,99,235,0.35); }
+  .vp-clip-edge::after{
+    content:''; position:absolute; top:8px; bottom:8px; width:2px;
+    background:rgba(255,255,255,0.8); border-radius:1px;
+  }
+  .vp-clip-edge.left::after{ left:3px; }
+  .vp-clip-edge.right::after{ right:3px; }
   .vp-playhead.live{background:#1D4ED8; box-shadow:0 0 7px rgba(37,99,235,0.75);}
   .vp-playhead.live::before{background:#1D4ED8;}
   .vp-sub{
@@ -3348,19 +3361,26 @@ window.addEventListener('resize', ()=>{
 function applyPreviewPlaybackIntent(){
   if(state.current !== 'studio') return;
 
-  // 이미지 클립 시퀀스 재생 — <img>는 timeupdate가 없으므로 타이머로 다음 클립 진행
-  clearTimeout(window.__seqImgTimer);
-  if(state.seqPlayback){
-    const edl = state.sourceEDL || [];
-    const selected = edl[state.selectedEdlIndex] || null;
-    const prevInfo = resolveProgramPreview(edl, selected);
-    if(prevInfo.kind === 'clip' && prevInfo.src?.isImage){
-      const dur = Math.max(0.3, clipOutDur(prevInfo.clip));
-      window.__seqImgTimer = setTimeout(()=>{
-        if(state.seqPlayback) advanceTimelineSequence();
-      }, dur * 1000);
+  // 이미지 클립 재생 — <video> 엘리먼트가 없으므로 가상 시계로 재생·진행·다음 클립 연결을 직접 구동
+  const edl = state.sourceEDL || [];
+  const selected = edl[state.selectedEdlIndex] || null;
+  const prevInfo = resolveProgramPreview(edl, selected);
+  const isImgPreview = prevInfo.kind === 'clip' && prevInfo.src?.isImage;
+
+  if(isImgPreview){
+    const shouldPlayImg = !!state.autoplayPreview
+      || (state.seqPlayback && imgPlayState?.clip !== prevInfo.clip);
+    state.autoplayPreview = false;
+    if(shouldPlayImg){
+      startImageClipPlayback(prevInfo.clip);
+      const btn = document.getElementById('nlePlayPause');
+      if(btn) btn.textContent = '⏸';
+    }else if(!state.seqPlayback){
+      stopImageClipPlayback();
     }
+    return; // 비디오 엘리먼트가 없는 이미지 프리뷰 — 아래 <video> 전용 로직은 건너뜀
   }
+  stopImageClipPlayback();
 
   const v = document.getElementById('nlePreviewVideo');
   if(!v) return;
@@ -7010,11 +7030,13 @@ function getTimelineContentDuration(){
  */
 function buildPlaybackProgress(){
   const v = document.getElementById('nlePreviewVideo');
-  if(!v || !Number.isFinite(v.currentTime)) return null;
+  let t = null;
+  if(v && Number.isFinite(v.currentTime)) t = v.currentTime;
+  else if(imgPlayState) t = (imgPlayState.clip.start || 0) + (Date.now() - imgPlayState.startedAt) / 1000;
+  if(t == null) return null;
   const edl = state.sourceEDL || [];
   if(!edl.length) return null;
   const starts = buildClipStartMap(edl);
-  const t = v.currentTime;
   const out = { tl:null, clips:{} };
 
   // 완성본(합본)은 타임라인 전체를 그대로 재생
@@ -7067,7 +7089,7 @@ function paintTimelineProgress(){
   const inner = document.querySelector('.vp-tl-inner');
   if(!inner) return;
   const v = document.getElementById('nlePreviewVideo');
-  const playing = !!(v && !v.paused && !v.ended);
+  const playing = !!((v && !v.paused && !v.ended) || imgPlayState);
   const prog = buildPlaybackProgress();
 
   inner.querySelectorAll('.vp-clip').forEach(el=>{
@@ -7119,6 +7141,34 @@ function startTimelineProgressLoop(){
     }
   };
   tlProgressRaf = requestAnimationFrame(step);
+}
+
+/** 이미지 클립 재생 — <img>는 timeupdate가 없으므로 가상 시계(rAF)로 진행·다음 클립 연결을 직접 구동 */
+let imgPlayState = null; // { clip, startedAt, dur }
+function stopImageClipPlayback(){
+  imgPlayState = null;
+}
+function startImageClipPlayback(clip){
+  const dur = Math.max(0.3, clipOutDur(clip));
+  imgPlayState = { clip, startedAt: Date.now(), dur };
+  const step = ()=>{
+    if(!imgPlayState || imgPlayState.clip !== clip) return; // 다른 클립으로 전환됨 · 정지됨
+    const elapsed = (Date.now() - imgPlayState.startedAt) / 1000;
+    if(elapsed >= imgPlayState.dur){
+      stopImageClipPlayback();
+      const advanced = state.seqPlayback ? advanceTimelineSequence() : false;
+      if(!advanced){
+        state.seqPlayback = false;
+        const btn = document.getElementById('nlePlayPause');
+        if(btn) btn.textContent = '▶';
+        paintTimelineProgress();
+      }
+      return;
+    }
+    paintTimelineProgress();
+    requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
 }
 
 ['play','playing'].forEach(ev=>{
@@ -7971,6 +8021,8 @@ function renderManualAssembly(){
       ${e.waveform ? `<div class="vp-clip-wave"></div>` : ''}
       <span class="vp-clip-now"></span>
       <div class="vp-clip-bot">${dur.toFixed(1)}s${(e.speed && e.speed!==1)?` · ${(e.speed*100).toFixed(0)}%`:''}</div>
+      <span class="vp-clip-edge left" data-clip-trim="start" data-clip-trim-i="${i}" title="시작점 조절"></span>
+      <span class="vp-clip-edge right" data-clip-trim="end" data-clip-trim-i="${i}" title="${src?.isImage?'표시 시간 늘리기·줄이기 (드래그)':'끝점 조절 (드래그)'}"></span>
     </div>`;
   };
 
@@ -11658,7 +11710,7 @@ document.addEventListener('click', async (e)=>{
     }
   }
 
-  if(e.target.closest('[data-select-edl]')){
+  if(e.target.closest('[data-select-edl]') && !e.target.closest('[data-clip-trim]')){
     state.selectedEdlIndex = Number(e.target.closest('[data-select-edl]').dataset.selectEdl);
     state.tlFocus = 'clip';
     // 프로그램 모니터 = 타임라인 클립
@@ -11940,33 +11992,50 @@ document.addEventListener('click', async (e)=>{
   }
 
   if(['nlePlayPause','nleSkipStart','nleSkipEnd','nleStepBack','nleStepFwd'].includes(e.target.id)){
+    const edl = state.sourceEDL || [];
+    const selEdl = edl[state.selectedEdlIndex] || null;
+    const prevInfo = resolveProgramPreview(edl, selEdl);
+    const isImgPreview = prevInfo.kind === 'clip' && prevInfo.src?.isImage;
     const v = document.getElementById('nlePreviewVideo');
-    if(!v) return;
-    applyPreviewVolume(v);
+    if(!v && !isImgPreview) return;
+    if(v) applyPreviewVolume(v);
     if(e.target.id === 'nlePlayPause'){
-      if(v.paused){
+      const isPlaying = isImgPreview ? !!imgPlayState : (v && !v.paused);
+      if(!isPlaying){
         // 타임라인(프로그램) 모니터에서 재생하면 클립이 끝날 때 다음 V1 클립으로 자연스럽게 이어짐
         if(state.previewMode !== 'source' && !state.sourceAssembledUrl){
           state.seqPlayback = true;
         }
-        v.play().then(()=>{ e.target.textContent = '⏸'; }).catch(()=>{
-          // 브라우저 자동재생 정책 시 잠시 음소거 후 재생, 볼륨 UI는 유지
-          const prevMuted = state.previewMuted;
-          v.muted = true;
-          v.play().then(()=>{
-            e.target.textContent = '⏸';
-            if(!prevMuted && (state.previewVolume??1) > 0){
-              v.muted = false;
-              applyPreviewVolume(v);
-            }
-          }).catch(()=>{});
-        });
-      } else { v.pause(); state.seqPlayback = false; e.target.textContent = '▶'; }
+        if(isImgPreview){
+          startImageClipPlayback(prevInfo.clip);
+          e.target.textContent = '⏸';
+        }else{
+          v.play().then(()=>{ e.target.textContent = '⏸'; }).catch(()=>{
+            // 브라우저 자동재생 정책 시 잠시 음소거 후 재생, 볼륨 UI는 유지
+            const prevMuted = state.previewMuted;
+            v.muted = true;
+            v.play().then(()=>{
+              e.target.textContent = '⏸';
+              if(!prevMuted && (state.previewVolume??1) > 0){
+                v.muted = false;
+                applyPreviewVolume(v);
+              }
+            }).catch(()=>{});
+          });
+        }
+      } else {
+        if(isImgPreview) stopImageClipPlayback(); else v.pause();
+        state.seqPlayback = false;
+        e.target.textContent = '▶';
+      }
     }
-    if(e.target.id === 'nleSkipStart') v.currentTime = 0;
-    if(e.target.id === 'nleSkipEnd') v.currentTime = v.duration || 0;
-    if(e.target.id === 'nleStepBack') v.currentTime = Math.max(0, v.currentTime - 1);
-    if(e.target.id === 'nleStepFwd') v.currentTime = Math.min(v.duration||0, v.currentTime + 1);
+    if(v){
+      // 스킵/스텝 버튼은 <video> 전용 — 이미지 프리뷰에는 내부 재생 위치 개념이 없음
+      if(e.target.id === 'nleSkipStart') v.currentTime = 0;
+      if(e.target.id === 'nleSkipEnd') v.currentTime = v.duration || 0;
+      if(e.target.id === 'nleStepBack') v.currentTime = Math.max(0, v.currentTime - 1);
+      if(e.target.id === 'nleStepFwd') v.currentTime = Math.min(v.duration||0, v.currentTime + 1);
+    }
   }
 
   if(e.target.id === 'nleSplitBtn'){
@@ -19285,6 +19354,60 @@ document.addEventListener('mouseup', ()=>{
   if(!subTrimDrag) return;
   subTrimDrag = null;
   // 자막만 갱신 — 영상 클립 길이는 건드리지 않음
+  render();
+});
+
+// 타임라인 클립(영상·이미지) 길이 조절 — 가장자리를 드래그해 재생 구간을 늘리거나 줄임
+let clipTrimDrag = null;
+document.addEventListener('dragstart', (e)=>{
+  if(e.target.closest?.('[data-clip-trim]')) e.preventDefault();
+});
+document.addEventListener('mousedown', (e)=>{
+  if(videoXformDrag || subTrimDrag) return;
+  const edge = e.target.closest?.('[data-clip-trim]');
+  if(!edge) return;
+  const i = Number(edge.dataset.clipTrimI);
+  const clip = state.sourceEDL?.[i];
+  if(!clip) return;
+  const src = state.sourceVideos[clip.videoIndex];
+  state.selectedEdlIndex = i;
+  state.tlFocus = 'clip';
+  clipTrimDrag = {
+    index: i,
+    edge: edge.dataset.clipTrim, // start | end
+    pps: timelinePPS(),
+    origStart: clip.start,
+    origEnd: clip.end,
+    startX: e.clientX,
+    isImage: !!src?.isImage,
+    srcDur: src?.isImage ? null : state.sourceDurations?.[clip.videoIndex],
+  };
+  e.preventDefault();
+  e.stopPropagation();
+});
+let clipTrimRafPending = false;
+document.addEventListener('mousemove', (e)=>{
+  if(!clipTrimDrag) return;
+  const clip = state.sourceEDL?.[clipTrimDrag.index];
+  if(!clip) return;
+  const dt = (e.clientX - clipTrimDrag.startX) / clipTrimDrag.pps;
+  const minDur = 0.3;
+  if(clipTrimDrag.edge === 'end'){
+    const cap = clipTrimDrag.isImage ? 60 : (clipTrimDrag.srcDur || (clipTrimDrag.origEnd + dt));
+    const next = Math.max(clip.start + minDur, Math.min(cap, clipTrimDrag.origEnd + dt));
+    clip.end = Number(next.toFixed(2));
+  }else{
+    const next = Math.max(0, Math.min(clip.end - minDur, clipTrimDrag.origStart + dt));
+    clip.start = Number(next.toFixed(2));
+  }
+  if(!clipTrimRafPending){
+    clipTrimRafPending = true;
+    requestAnimationFrame(()=>{ clipTrimRafPending = false; render(); });
+  }
+});
+document.addEventListener('mouseup', ()=>{
+  if(!clipTrimDrag) return;
+  clipTrimDrag = null;
   render();
 });
 
