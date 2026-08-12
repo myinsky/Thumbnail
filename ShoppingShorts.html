@@ -1963,6 +1963,7 @@ let state = {
   suggestEmptyNote: '', // empty/error 안내 문구
   previewRange: null, // {start,end} 미리보기 구간 재생용
   autoplayPreview: false,
+  seqPlayback: false, // true면 클립 끝 도달 시 다음 V1 클립으로 자동 이어재생
   previewMode: 'timeline', // 'timeline' = 프로그램(타임라인) · 'source' = 소스 모니터
   previewVolume: 1,  // 모니터 미리보기 볼륨 0~1
   previewMuted: false,
@@ -3307,6 +3308,21 @@ window.addEventListener('resize', ()=>{
 // 미리보기 준비: 기본적으로 일시정지. 명시적으로 autoplay일 때만 재생
 function applyPreviewPlaybackIntent(){
   if(state.current !== 'studio') return;
+
+  // 이미지 클립 시퀀스 재생 — <img>는 timeupdate가 없으므로 타이머로 다음 클립 진행
+  clearTimeout(window.__seqImgTimer);
+  if(state.seqPlayback){
+    const edl = state.sourceEDL || [];
+    const selected = edl[state.selectedEdlIndex] || null;
+    const prevInfo = resolveProgramPreview(edl, selected);
+    if(prevInfo.kind === 'clip' && prevInfo.src?.isImage){
+      const dur = Math.max(0.3, clipOutDur(prevInfo.clip));
+      window.__seqImgTimer = setTimeout(()=>{
+        if(state.seqPlayback) advanceTimelineSequence();
+      }, dur * 1000);
+    }
+  }
+
   const v = document.getElementById('nlePreviewVideo');
   if(!v) return;
   // 네이티브 컨트롤·자동재생 차단 (모니터 밖 브라우저 플레이어처럼 보이는 현상 방지)
@@ -3322,17 +3338,39 @@ function applyPreviewPlaybackIntent(){
   const range = state.previewRange;
   const shouldPlay = !!state.autoplayPreview;
   state.autoplayPreview = false;
-  const startAt = range ? Number(range.start) || 0 : 0;
-  const endAt = range && range.end != null ? Number(range.end) : null;
-  // 타임라인 클립 선택 시 data-clip-start로 첫 프레임 맞춤
+  // 타임라인 클립 선택 시 data-clip-start/-end로 트림 구간을 맞춤 (기존 코드는 clipStart를
+  // 정지 미리보기에만 쓰고 재생 시작·종료에는 반영하지 않아, 재생하면 원본 끝까지 흘러가는 버그가 있었음)
   const clipStart = v.dataset.clipStart != null ? Number(v.dataset.clipStart) : null;
-  const stillAt = range ? startAt : (clipStart != null && isFinite(clipStart) ? clipStart : 0);
+  const clipEnd = v.dataset.clipEnd != null ? Number(v.dataset.clipEnd) : null;
+  const beginAt = range ? (Number(range.start) || 0)
+    : (clipStart != null && isFinite(clipStart) ? clipStart : 0);
+  const endAt = (range && range.end != null) ? Number(range.end)
+    : (clipEnd != null && isFinite(clipEnd) ? clipEnd : null);
+
   const seekStillAt = ()=>{
     try{ v.pause(); }catch(_){}
-    try{ v.currentTime = stillAt; }catch(_){}
+    try{ v.currentTime = beginAt; }catch(_){}
     const btn = document.getElementById('nlePlayPause');
     if(btn) btn.textContent = '▶';
   };
+
+  // 트림 끝에서 정지(단일 클립 미리보기) 또는 다음 클립으로 이어감(시퀀스 재생).
+  // 재생 여부와 무관하게 항상 부착 — Play 버튼을 직접 눌러 재생을 재개하는 경우도 보호되도록.
+  if(endAt != null && isFinite(endAt)){
+    const onTime = ()=>{
+      if(v.currentTime >= endAt - 0.05){
+        v.removeEventListener('timeupdate', onTime);
+        const advanced = state.seqPlayback ? advanceTimelineSequence() : false;
+        if(!advanced){
+          try{ v.pause(); v.currentTime = endAt; }catch(_){}
+          const btn = document.getElementById('nlePlayPause');
+          if(btn) btn.textContent = '▶';
+        }
+      }
+    };
+    v.addEventListener('timeupdate', onTime);
+  }
+
   if(!shouldPlay){
     if(v.readyState >= 1) seekStillAt();
     else v.addEventListener('loadedmetadata', seekStillAt, { once:true });
@@ -3340,7 +3378,7 @@ function applyPreviewPlaybackIntent(){
   }
 
   const kick = ()=>{
-    try{ v.currentTime = startAt; }catch(_){}
+    try{ v.currentTime = beginAt; }catch(_){}
     applyPreviewVolume(v);
     v.play().then(()=>{
       const btn = document.getElementById('nlePlayPause');
@@ -3358,19 +3396,6 @@ function applyPreviewPlaybackIntent(){
   };
   if(v.readyState >= 1) kick();
   else v.addEventListener('loadedmetadata', kick, { once:true });
-
-  if(endAt != null && isFinite(endAt)){
-    const onTime = ()=>{
-      if(v.currentTime >= endAt - 0.05){
-        v.pause();
-        try{ v.currentTime = endAt; }catch(_){}
-        v.removeEventListener('timeupdate', onTime);
-        const btn = document.getElementById('nlePlayPause');
-        if(btn) btn.textContent = '▶';
-      }
-    };
-    v.addEventListener('timeupdate', onTime);
-  }
 }
 
 /** 소스 모니터로 전환해 표시. autoplay 기본 false */
@@ -7124,6 +7149,46 @@ function maybeAutoFitTimeline(){
   });
 }
 
+/** V1(메인) 트랙 클립을 타임라인상 시작 시각순으로 정렬한 목록 */
+function timelineV1Order(){
+  const edl = state.sourceEDL || [];
+  const starts = buildClipStartMap(edl);
+  return edl
+    .map((e,i)=> ({ i, e, tlStart: starts[i] ?? 0 }))
+    .filter(x => (x.e.track||1) === 1)
+    .sort((a,b)=> a.tlStart - b.tlStart);
+}
+
+/** 지정한 클립부터 타임라인 끝까지 이어재생 시작 (자연스러운 연속 미리보기) */
+function startTimelineSequencePlayback(fromEdlIndex){
+  const order = timelineV1Order();
+  if(!order.length) return;
+  let pos = order.findIndex(x=> x.i === fromEdlIndex);
+  if(pos < 0) pos = 0;
+  state.seqPlayback = true;
+  state.selectedEdlIndex = order[pos].i;
+  state.previewMode = 'timeline';
+  state.previewRange = null;
+  state.autoplayPreview = true;
+  render();
+}
+
+/** 현재 클립이 끝에 도달했을 때 다음 V1 클립으로 넘어감. 다음이 없으면 정지하고 false 반환 */
+function advanceTimelineSequence(){
+  const order = timelineV1Order();
+  const curPos = order.findIndex(x=> x.i === state.selectedEdlIndex);
+  const next = order[curPos+1];
+  if(!next){
+    state.seqPlayback = false;
+    render();
+    return false;
+  }
+  state.selectedEdlIndex = next.i;
+  state.autoplayPreview = true;
+  render();
+  return true;
+}
+
 function resolveProgramPreview(edl, selected){
   if(state.sourceAssembledUrl){
     return { kind:'assembled', url: state.sourceAssembledUrl };
@@ -7397,7 +7462,7 @@ async function buildAiViralEdlFromSelection(indices, onStatus){
   }
   state.sourceScenes = Object.entries(sceneMap).flatMap(([vi, scenes]) => scenes.map(s => ({ ...s, videoIndex:Number(vi) })));
 
-  onStatus?.('② 임팩트 순으로 훅→전개→페이오프 배치 중...');
+  onStatus?.('② 제품 노출도+임팩트 점수로 훅→전개→페이오프 배치 중...');
   const cutFromScene = (vi, scene, len)=>{
     const d = durOf(vi);
     const sceneLen = scene.end - scene.start;
@@ -7410,7 +7475,7 @@ async function buildAiViralEdlFromSelection(indices, onStatus){
       end: Number(Math.min(d, start + len).toFixed(2)),
       line: '',
       volume: 0,
-      suggestMeta: { reason: scene.desc, value: `임팩트 ${scene.impact}/10 · ${scene.action||''}` },
+      suggestMeta: { reason: scene.desc, value: `임팩트 ${scene.impact}/10 · 제품노출 ${scene.productVisible ?? '-'}/10 · ${scene.action||''}` },
     };
   };
   const heuristicCut = (vi, ratio, len)=>{
@@ -7419,9 +7484,11 @@ async function buildAiViralEdlFromSelection(indices, onStatus){
     return { videoIndex:vi, start:Number(s.toFixed(2)), end:Number(Math.min(d, s+len).toFixed(2)), line:'', volume:0 };
   };
 
+  // 제품 홍보가 목적이므로 임팩트만 보지 않고 제품 노출도(score = (impact+productVisible)/2)로 정렬
+  const sceneScore = (s)=> s.score ?? s.impact;
   const used = new Set(); // "vi:sceneStart" 중복 방지
   const pickBest = (vi, len, excludeTop=0)=>{
-    const scenes = (sceneMap[vi]||[]).slice().sort((a,b)=> b.impact - a.impact);
+    const scenes = (sceneMap[vi]||[]).slice().sort((a,b)=> sceneScore(b) - sceneScore(a));
     for(let k=excludeTop; k<scenes.length; k++){
       const key = vi + ':' + scenes[k].start;
       if(used.has(key)) continue;
@@ -7437,13 +7504,13 @@ async function buildAiViralEdlFromSelection(indices, onStatus){
   let midLen = mids.length ? Math.max(1.1, Math.min(2.0, (13.0 - HOOK - PAYOFF - TAIL) / mids.length)) : 1.5;
 
   const segs = [];
-  // 훅: 전체 영상 중 임팩트 최고 장면 (있으면), 없으면 첫 영상 휴리스틱
+  // 훅: 전체 영상 중 (임팩트+제품노출) 종합 점수 최고 장면 (있으면), 없으면 첫 영상 휴리스틱
   let hookSeg = null;
   {
     let best = null, bestVi = null;
     for(const vi of idxs){
-      const top = (sceneMap[vi]||[]).slice().sort((a,b)=> b.impact-a.impact)[0];
-      if(top && (!best || top.impact > best.impact)){ best = top; bestVi = vi; }
+      const top = (sceneMap[vi]||[]).slice().sort((a,b)=> sceneScore(b)-sceneScore(a))[0];
+      if(top && (!best || sceneScore(top) > sceneScore(best))){ best = top; bestVi = vi; }
     }
     if(best){ used.add(bestVi + ':' + best.start); hookSeg = { ...cutFromScene(bestVi, best, HOOK), role:'hook' }; }
     else hookSeg = { ...heuristicCut(first, 0.12, HOOK), role:'hook' };
@@ -7476,16 +7543,56 @@ async function buildAiViralEdlFromSelection(indices, onStatus){
   return { edl: segs, analyzedCount, totalVideos: idxs.length };
 }
 
-/** 완성된 타임라인에서 끝까지 보게 만드는 나레이션 대본 생성 */
-async function generateRetentionScriptFromEdl(){
+/** EDL 클립 구간과 겹치거나 가장 가까운 분석 장면의 설명을 찾음 (없으면 빈 문자열) */
+function findSceneDescForClip(e){
+  const scenes = (state.sourceScenes||[]).filter(s => s.videoIndex === e.videoIndex);
+  if(!scenes.length) return '';
+  let best = null, bestOverlap = 0;
+  for(const s of scenes){
+    const overlap = Math.min(s.end, e.end) - Math.max(s.start, e.start);
+    if(overlap > bestOverlap){ bestOverlap = overlap; best = s; }
+  }
+  if(best) return best.desc || '';
+  let nearest = null, nearestDist = Infinity;
+  for(const s of scenes){
+    const dist = Math.min(Math.abs(s.start - e.end), Math.abs(e.start - s.end));
+    if(dist < nearestDist){ nearestDist = dist; nearest = s; }
+  }
+  return nearest?.desc || '';
+}
+
+async function generateRetentionScriptFromEdl(onStatus){
   const edl = (state.sourceEDL||[]).filter(e => (e.track||1) === 1);
   if(!edl.length) throw new Error('타임라인에 클립이 없어요. 먼저 자동 편집이나 배치를 해주세요.');
+
+  // 대본이 실제 화면 내용을 반영하도록, 아직 분석되지 않은 영상은 여기서 채워 넣음
+  // (⚡ 빠른 바이럴 컷·수동 배치처럼 장면 분석을 거치지 않은 타임라인도 지원)
+  if(!Array.isArray(state.sourceScenes)) state.sourceScenes = [];
+  const missingVideos = [...new Set(edl.map(e=>e.videoIndex))]
+    .filter(vi => state.sourceVideos[vi] && !state.sourceVideos[vi].isImage
+      && !state.sourceScenes.some(s=>s.videoIndex===vi));
+  if(missingVideos.length && String(state.keys.gemini||'').trim()){
+    const capped = missingVideos.slice(0, MAX_VIRAL_AUTO);
+    for(let k=0;k<capped.length;k++){
+      const vi = capped[k];
+      onStatus?.(`영상 내용 분석 중 (${k+1}/${capped.length})...`);
+      try{
+        const src = state.sourceVideos[vi].file || state.sourceVideos[vi].url;
+        const scenes = await analyzeVideoWithGemini(src, state.sourceVideos[vi].name || `영상${vi+1}`);
+        state.sourceScenes.push(...scenes.map(s=>({ ...s, videoIndex:vi })));
+      }catch(err){
+        console.warn('대본용 장면 분석 실패 (video '+vi+'):', err?.message||err);
+      }
+    }
+  }
+  onStatus?.('리텐션 대본 작성 중...');
+
   const clips = edl.map((e,i)=>({
     i: i+1,
     dur: Number(Math.max(0.5, e.end - e.start).toFixed(1)),
     role: e.role || (i===0?'hook': i===edl.length-1?'payoff':'build'),
     name: state.sourceVideos[e.videoIndex]?.name || '',
-    desc: e.line || e.suggestMeta?.reason || '',
+    desc: e.line || e.suggestMeta?.reason || findSceneDescForClip(e) || '',
     maxChars: Math.max(8, Math.round(Math.max(0.5, e.end - e.start) * 4.2)),
   }));
   const productHint = compactStoryText(state.productDescription || state.selectedCoupang?.name || state.analysis?.product || '');
@@ -8019,8 +8126,8 @@ function renderManualAssembly(){
             </div>
           </div>
           ${(state.selectedSourceIndices||[]).length ? `
-            <button class="vp-btn primary block" id="aiViralAutoEditBtn" type="button" style="margin-bottom:6px;">🧠 선택 ${Math.min(state.selectedSourceIndices.length, MAX_VIRAL_AUTO)}개 AI 분석 + 바이럴 자동 편집</button>
-            <div class="settings-note" style="margin:0 0 6px; font-size:11px;">Gemini가 장면별 임팩트를 분석 → 최고 장면을 훅·페이오프에 배치 (Gemini 키 필요)</div>
+            <button class="vp-btn primary block" id="aiViralAutoEditBtn" type="button" style="margin-bottom:6px;">🧠 선택 ${Math.min(state.selectedSourceIndices.length, MAX_VIRAL_AUTO)}개 AI 분석 + 제품 어필 자동 편집</button>
+            <div class="settings-note" style="margin:0 0 6px; font-size:11px;">Gemini가 각 영상에서 임팩트와 <b>제품 노출도</b>가 가장 높은 구간만 잘라 훅·전개·페이오프에 이어붙입니다 (Gemini 키 필요)</div>
             <button class="vp-btn block" id="viralAutoEditBtn" type="button" style="margin-bottom:6px;">⚡ 빠른 바이럴 컷 (분석 없이 공식만 · 즉시)</button>
             <button class="vp-btn block" id="selectedAutoEditBtn" type="button" style="margin-bottom:8px;">🤖 대본 기반 AI 정밀 편집 (음성·장면 분석)</button>
             ${statusHtml('viral-auto')}
@@ -8190,6 +8297,10 @@ function renderManualAssembly(){
       <div class="vp-stage">
         ${(()=>{
           const prev = resolveProgramPreview(edl, selected);
+          const v1Order = timelineV1Order();
+          const seqBtn = (v1Order.length && !state.sourceAssembledUrl && prev.kind !== 'source')
+            ? `<button class="vp-mini go" id="playFullSequenceBtn" type="button" title="1번 클립부터 끝까지 이어재생">▶ 전체 재생 (${v1Order.length}컷)</button>`
+            : '';
           const head = state.sourceAssembledUrl
             ? `<span class="vp-chip done">✓ 완성본</span>
                <a class="vp-mini primary-dl" href="${state.sourceAssembledUrl}" download="${(state.projectName||'shorts').replace(/[^\\w가-힣-]/g,'_')}.mp4">💾 MP4 다운로드</a>
@@ -8198,7 +8309,7 @@ function renderManualAssembly(){
               ? `<span class="vp-chip">소스 모니터 · ${prev.index+1}번</span>
                  <button class="vp-mini" id="backToTimelinePreview" type="button">타임라인 보기로</button>`
               : prev.kind==='clip'
-                ? `<span class="vp-chip">프로그램 · 클립 ${(state.selectedEdlIndex??0)+1} · ${prev.clip.start}s~${prev.clip.end}s</span>`
+                ? `<span class="vp-chip">프로그램 · 클립 ${(state.selectedEdlIndex??0)+1} · ${prev.clip.start}s~${prev.clip.end}s${state.seqPlayback?' · 이어재생 중':''}</span>${seqBtn}`
                 : `<span class="vp-chip dim">타임라인 비어 있음</span>`;
           const xfLive = (prev.kind==='source' || prev.kind==='clip') ? getActiveXform() : null;
           const canMouseXform = !!(xfLive && state.workspace !== 'graphic' && state.nlePanel !== 'text' && insp !== 'sub');
@@ -11262,6 +11373,13 @@ document.addEventListener('click', async (e)=>{
     render();
   }
 
+  if(e.target.id === 'playFullSequenceBtn'){
+    const order = timelineV1Order();
+    if(!order.length) return;
+    startTimelineSequencePlayback(order[0].i);
+    return;
+  }
+
   const tplChip = e.target.closest?.('[data-shorts-template]');
   if(tplChip?.dataset.shortsTemplate){
     applyShortsTemplate(tplChip.dataset.shortsTemplate);
@@ -11315,13 +11433,14 @@ document.addEventListener('click', async (e)=>{
       state.tlEditMode = 'auto';
       state.previewMode = 'timeline';
       state.playhead = 0;
+      state.seqPlayback = false;
       snapMainClipsTogether();
       // 자막은 아직 없음 — 기존 자막이 남아 있으면 새 컷 길이와 어긋나므로 비움
       state.subtitles = [];
       const total = edl.reduce((a,s)=> a + (s.end - s.start), 0);
       setStatus('viral-auto','ok',
         `완료! ${edl.length}컷 · 총 ${total.toFixed(1)}초${note}` +
-        ` — 미리보기 ▶ 로 확인하세요. 다음: ① 🎙 대본 뽑기 → ② AI 탭에서 나레이션 음성 → ③ 자막 검수 → ④ 내보내기.`);
+        ` — 상단 「▶ 전체 재생」으로 처음부터 끝까지 이어서 확인하세요. 다음: ① 🎙 대본 뽑기 → ② AI 탭에서 나레이션 음성 → ③ 자막 검수 → ④ 내보내기.`);
       state.selectedSourceIndices = [];
       render();
     }catch(err){
@@ -11333,7 +11452,7 @@ document.addEventListener('click', async (e)=>{
   if(e.target.id === 'autoScriptFromEdlBtn'){
     setStatus('auto-script','loading','타임라인 컷에 맞춰 리텐션 대본 생성 중... (' + textAiProviderLabel(getTextAiProvider()) + ')');
     try{
-      const n = await generateRetentionScriptFromEdl();
+      const n = await generateRetentionScriptFromEdl((msg)=> setStatus('auto-script','loading', msg));
       setStatus('auto-script','ok',`${n}줄 생성 — 자막에 반영됐어요. 음성은 AI 탭의 나레이션 버튼으로 입히세요.`);
       render();
       scrollSubTrackIntoView();
@@ -11498,6 +11617,7 @@ document.addEventListener('click', async (e)=>{
     state.activeSourceIndex = null;
     state.previewRange = null;
     state.autoplayPreview = false;
+    state.seqPlayback = false; // 수동 선택은 이어재생 예약을 취소하고 그 클립에서 정지
     render();
   }
 
@@ -11776,6 +11896,10 @@ document.addEventListener('click', async (e)=>{
     applyPreviewVolume(v);
     if(e.target.id === 'nlePlayPause'){
       if(v.paused){
+        // 타임라인(프로그램) 모니터에서 재생하면 클립이 끝날 때 다음 V1 클립으로 자연스럽게 이어짐
+        if(state.previewMode !== 'source' && !state.sourceAssembledUrl){
+          state.seqPlayback = true;
+        }
         v.play().then(()=>{ e.target.textContent = '⏸'; }).catch(()=>{
           // 브라우저 자동재생 정책 시 잠시 음소거 후 재생, 볼륨 UI는 유지
           const prevMuted = state.previewMuted;
@@ -11788,7 +11912,7 @@ document.addEventListener('click', async (e)=>{
             }
           }).catch(()=>{});
         });
-      } else { v.pause(); e.target.textContent = '▶'; }
+      } else { v.pause(); state.seqPlayback = false; e.target.textContent = '▶'; }
     }
     if(e.target.id === 'nleSkipStart') v.currentTime = 0;
     if(e.target.id === 'nleSkipEnd') v.currentTime = v.duration || 0;
@@ -13828,6 +13952,11 @@ async function analyzeVideoWithGemini(source, label='영상'){
     throw new Error(`${label}: 20MB 초과 영상은 지원 안 돼요. 압축해서 다시 올려주세요.`);
   }
   const b64 = await blobToBase64(blob);
+  // 상품 홍보 맥락이 있으면 임팩트만이 아니라 "제품 노출도"도 함께 채점하게 함
+  const productHint = compactStoryText(state.productDescription || state.selectedCoupang?.name || state.analysis?.product || '');
+  const productLine = productHint
+    ? `분석 대상 상품: "${productHint}". 이 상품이 화면에 얼마나 뚜렷하게 보이는지도 함께 채점할 것.`
+    : '';
   const body = {
     contents: [{
       parts: [
@@ -13836,10 +13965,12 @@ async function analyzeVideoWithGemini(source, label='영상'){
           '- start, end: 초 (숫자)',
           '- desc: 무슨 일이 일어나는지 구체적으로 한 문장',
           '- impact: 1~10. 스크롤을 멈추게 할 시각적 임팩트/재미/놀라움 (10=최고 훅감)',
+          '- productVisible: 1~10. 상품/제품이 화면에 얼마나 선명하고 매력적으로 보이는지 (사용 중/클로즈업/전후비교=높음, 상품이 안 보이거나 배경/사람만 나옴=낮음). 상품이 명시되지 않았으면 화면의 핵심 사물이 얼마나 선명한지로 판단.',
           '- action: 핵심 동작 유형 (예: 사용시연, 리액션, 전후비교, 클로즈업, 실패, 반전)',
+          productLine,
           'JSON 배열만 출력 (다른 텍스트·코드블록 없이):',
-          '[{"start":0,"end":3,"desc":"...","impact":7,"action":"리액션"}]'
-        ].join('\n') },
+          '[{"start":0,"end":3,"desc":"...","impact":7,"productVisible":8,"action":"리액션"}]'
+        ].filter(Boolean).join('\n') },
         { inline_data: { mime_type: blob.type || 'video/mp4', data: b64 } }
       ]
     }]
@@ -13859,13 +13990,20 @@ async function analyzeVideoWithGemini(source, label='영상'){
   catch(err){ throw new Error(`${label} 장면 JSON 파싱 실패: ${err.message}`); }
   if(!Array.isArray(arr)) throw new Error(`${label} 장면 배열이 아니에요.`);
   return arr
-    .map(sc => ({
-      start: Math.max(0, Number(sc?.start) || 0),
-      end: Math.max(0, Number(sc?.end) || 0),
-      desc: String(sc?.desc || '').trim(),
-      impact: Math.max(1, Math.min(10, Number(sc?.impact) || 5)),
-      action: String(sc?.action || '').trim(),
-    }))
+    .map(sc => {
+      const impact = Math.max(1, Math.min(10, Number(sc?.impact) || 5));
+      const productVisible = Math.max(1, Math.min(10, Number(sc?.productVisible) || 5));
+      return {
+        start: Math.max(0, Number(sc?.start) || 0),
+        end: Math.max(0, Number(sc?.end) || 0),
+        desc: String(sc?.desc || '').trim(),
+        impact,
+        productVisible,
+        // 제품 홍보용 종합 점수 — 제품이 안 보이는 장면이 훅으로 뽑히지 않도록 임팩트와 절반씩 반영
+        score: Number(((impact + productVisible) / 2).toFixed(2)),
+        action: String(sc?.action || '').trim(),
+      };
+    })
     .filter(sc => sc.end > sc.start);
 }
 
