@@ -1437,7 +1437,7 @@
     outline:1.5px dashed rgba(96,165,250,0.95);
     outline-offset:2px;
   }
-  .vp-caption-box.has-bg{padding:0.12em 0.42em;}
+  .vp-caption-box.has-bg{padding:0.05em 0.24em;}
   .vp-caption-box.is-bubble{
     background:#fff !important; color:#111 !important;
     border-radius:1.1em !important; padding:0.35em 0.7em !important;
@@ -8214,17 +8214,7 @@ function renderManualAssembly(){
             </div>
           </div>
           ${(state.selectedSourceIndices||[]).length ? `
-            <button class="vp-btn primary block" id="aiViralAutoEditBtn" type="button" style="margin-bottom:6px;">🧠 선택 ${Math.min(state.selectedSourceIndices.length, MAX_VIRAL_AUTO)}개 AI 분석 + 제품 어필 자동 편집</button>
-            <div class="settings-note" style="margin:0 0 6px; font-size:11px;">Gemini가 각 영상에서 임팩트와 <b>제품 노출도</b>가 가장 높은 구간만 잘라 훅·전개·페이오프에 이어붙입니다 (Gemini 키 필요)</div>
-            <button class="vp-btn block" id="viralAutoEditBtn" type="button" style="margin-bottom:6px;">⚡ 빠른 바이럴 컷 (분석 없이 공식만 · 즉시)</button>
-            <button class="vp-btn block" id="selectedAutoEditBtn" type="button" style="margin-bottom:8px;">🤖 대본 기반 AI 정밀 편집 (음성·장면 분석)</button>
-            ${statusHtml('viral-auto')}
-            ${statusHtml('selected-auto')}
-          ` : ''}
-
-          ${(state.sourceEDL||[]).length ? `
-            <button class="vp-btn tool accent block" id="autoScriptFromEdlBtn" type="button" style="margin-bottom:8px;" title="타임라인 클립에 맞춰 끝까지 보게 만드는 나레이션을 생성합니다">🎙 끝까지 보게 하는 대본 뽑기</button>
-            ${statusHtml('auto-script')}
+            <div class="settings-note" style="margin:0 0 6px; font-size:11px;">AI 자동 편집은 좌측 ✨AI생성 탭으로 옮겼어요. 선택한 ${Math.min(state.selectedSourceIndices.length, MAX_VIRAL_AUTO)}개로 바로 실행할 수 있어요.</div>
           ` : ''}
           <div class="vp-media-grid">
             ${state.sourceVideos.length ? state.sourceVideos.map((v,i)=>{
@@ -8298,10 +8288,26 @@ function renderManualAssembly(){
             </div>
             <div class="settings-note" style="margin:0 0 8px; font-size:10px;">다운로드한 영상 하단에 박힌 자막·워터마크를 ${state.subErase?.mode==='crop'?'잘라내고 화면을 채웁니다':'블러로 가립니다'}. 미리보기에는 표시되지 않고 내보내기에 적용돼요.</div>
           ` : ''}
+          <div class="vp-hint">템플릿을 고른 뒤에도 미리보기에서 제목·자막을 드래그해 위치를, 우측 T자막 탭에서 크기·색상을 자유롭게 다시 조정할 수 있어요.</div>
         ` : ''}
 
         ${panel==='ai' ? `
-          <div class="vp-panel-title">AI 자동 편집</div>
+          ${(state.selectedSourceIndices||[]).length ? `
+            <div class="vp-panel-title">선택 클립 AI 자동 편집</div>
+            <button class="vp-btn primary block" id="aiViralAutoEditBtn" type="button" style="margin-bottom:6px;">🧠 선택 ${Math.min(state.selectedSourceIndices.length, MAX_VIRAL_AUTO)}개 AI 분석 + 제품 어필 자동 편집</button>
+            <div class="settings-note" style="margin:0 0 6px; font-size:11px;">Gemini가 각 영상에서 임팩트와 <b>제품 노출도</b>가 가장 높은 구간만 잘라 훅·전개·페이오프에 이어붙입니다 (Gemini 키 필요)</div>
+            <button class="vp-btn block" id="viralAutoEditBtn" type="button" style="margin-bottom:6px;">⚡ 빠른 바이럴 컷 (분석 없이 공식만 · 즉시)</button>
+            <button class="vp-btn block" id="selectedAutoEditBtn" type="button" style="margin-bottom:8px;">🤖 대본 기반 AI 정밀 편집 (음성·장면 분석)</button>
+            ${statusHtml('viral-auto')}
+            ${statusHtml('selected-auto')}
+            <div class="vp-sep"></div>
+          ` : `<div class="vp-hint" style="margin-bottom:10px;">좌측 🎞미디어 탭에서 클립을 선택하면 여기서 AI 자동 편집을 실행할 수 있어요.</div>`}
+          ${(state.sourceEDL||[]).length ? `
+            <button class="vp-btn tool accent block" id="autoScriptFromEdlBtn" type="button" style="margin-bottom:8px;" title="타임라인 클립에 맞춰 끝까지 보게 만드는 나레이션을 생성합니다">🎙 끝까지 보게 하는 대본 뽑기</button>
+            ${statusHtml('auto-script')}
+            <div class="vp-sep"></div>
+          ` : ''}
+          <div class="vp-panel-title">AI 자동 편집 (대본 기준)</div>
           <button class="vp-btn primary block" id="nleAutoEditBtn" type="button" ${!state.sourceVideos.length?'disabled':''}>🤖 대본 맞춰 자동 편집</button>
           <button class="vp-btn block" id="manualEdlBtn" type="button" ${!state.sourceVideos.length?'disabled':''}>✍️ 대본대로 균등 배치</button>
           ${statusHtml('source-analyze')}
@@ -8328,31 +8334,15 @@ function renderManualAssembly(){
 
         ${panel==='text' ? `
           <div class="vp-panel-title">자막 <span>${state.subtitles?.length||0}개</span></div>
-          <div class="vp-grid2">
-            <button class="vp-btn primary" id="addSubtitleRowBtn" type="button">＋ 자막 추가</button>
-            <button class="vp-btn" id="addTitleRowBtn" type="button" style="background:#FFF6D8; color:#7A5B00; border-color:#F3D98B;">🔥 ＋ 타이틀 추가</button>
-            <button class="vp-btn" id="autoSubtitleBtn" type="button" ${!state.voiceUrl?'disabled':''}>🎤 음성 분석</button>
-            <button class="vp-btn" id="subFromScriptBtn" type="button" ${!state.sourceScript?'disabled':''}>📝 대본에서</button>
-            <button class="vp-btn" id="importSrtBtnTrigger" type="button">📂 불러오기</button>
+          <div class="vp-hint">자막 추가·수정·스타일(색·배경·테두리·위치·크기)은 우측 <b>자막</b> 탭에서 하고, 미리보기에서 드래그로도 옮길 수 있어요. 여기서는 자동 생성·가져오기·내보내기만 다뤄요.</div>
+          <div class="vp-grid2" style="margin-top:8px;">
+            <button class="vp-btn" id="autoSubtitleBtn" type="button" ${!state.voiceUrl?'disabled':''}>🎤 음성 분석으로 자동 생성</button>
+            <button class="vp-btn" id="subFromScriptBtn" type="button" ${!state.sourceScript?'disabled':''}>📝 대본에서 자동 생성</button>
           </div>
+          <button class="vp-btn block" id="importSrtBtnTrigger" type="button" style="margin-top:6px;">📂 .srt 불러오기</button>
           <input type="file" id="importSrtFile" accept=".srt,text/plain" style="display:none;">
           ${statusHtml('subtitle-io')}
-          <div class="vp-hint">텍스트를 입력·붙여넣기하세요. 색·폰트·크기는 우측 <b>그래픽</b> 탭에서, 미리보기에서 드래그로 위치를 옮길 수 있어요.</div>
-          <div class="vp-sub-list">
-            ${state.subtitles?.length ? state.subtitles.map((s,i)=>`
-              <div class="vp-sub-item ${state.selectedSubIndex===i?'active':''} ${s.kind==='title'?'is-title':''}" data-select-sub="${i}">
-                <div class="vp-sub-head">
-                  <span class="vp-sub-no">${i+1}</span>
-                  <button class="vp-sub-kind" data-toggle-sub-kind="${i}" type="button" title="자막↔타이틀 전환">${s.kind==='title'?'🔥 타이틀':'💬 자막'}</button>
-                  <span class="vp-sub-no" title="타임라인 자막 줄">T${s.lane||1}</span>
-                  <input type="text" data-sub-start="${i}" value="${s.start.toFixed(1)}">
-                  <span>~</span>
-                  <input type="text" data-sub-end="${i}" value="${s.end.toFixed(1)}">
-                  <button class="vp-mini" data-remove-subtitle="${i}" type="button">✕</button>
-                </div>
-                <textarea data-sub-text="${i}" rows="2" placeholder="자막 입력">${s.text}</textarea>
-              </div>`).join('') : `<div class="vp-empty">자막이 없어요</div>`}
-          </div>
+          <div class="vp-sep"></div>
           <button class="vp-btn block" id="downloadSrtBtn" type="button" ${!state.subtitles?.length?'disabled':''}>💾 .srt 저장</button>
           <button class="vp-btn block" id="copyScriptForCapcutBtn" type="button" style="margin-top:6px;" title="타임라인 대본을 복사해 캡컷 「텍스트 음성 변환」에 붙여넣기">📋 대본 복사 (캡컷 TTS용)</button>
           <div class="settings-note" style="margin-top:4px; font-size:10px;">캡컷 워크플로우: 여기서 무음 영상+.srt 내보내기 → 캡컷에서 자막 가져오기 + TTS 음성 생성.</div>
