@@ -145,7 +145,7 @@
     border-color:var(--violet);
     box-shadow:0 0 0 3px rgba(41,85,200,0.16);
   }
-  #huntKeywordInput, #youtubeQueryInput, #tiktokQueryInput, #douyinQueryInput, #xhsQueryInput, #coupangQueryInput,
+  #huntKeywordInput, #youtubeQueryInput, #tiktokQueryInput, #xhsQueryInput, #coupangQueryInput,
   #ytMaterialKw{
     border-color:#6F89B8; border-width:2.5px;
   }
@@ -355,6 +355,20 @@
   .hunt-track b, .hunt-track span{pointer-events:none;}
   .hunt-track b{display:block; font-size:14px; margin-bottom:4px; color:var(--text-hi);}
   .hunt-track span{display:block; font-size:12.5px; color:var(--text-lo); line-height:1.45;}
+  .hunt-plat-chip-row{display:flex; gap:6px; flex-wrap:wrap;}
+  .hunt-plat-chip{
+    border:2px solid #8FA3C7; background:#fff; border-radius:10px; padding:8px 12px;
+    font:inherit; font-size:13px; font-weight:700; cursor:pointer; color:var(--text-lo);
+    white-space:nowrap; user-select:none;
+  }
+  .hunt-plat-chip:hover{border-color:var(--violet); color:var(--text-hi); background:#F4F8FF;}
+  .hunt-plat-chip.active{border-color:var(--violet); background:#EAF0FC; color:var(--violet); box-shadow:0 0 0 2px rgba(41,85,200,0.2);}
+  .hunt-wf-hint{margin-bottom:10px;}
+  .hunt-wf-hint summary{cursor:pointer; font-size:12.5px; font-weight:700; color:var(--text-lo); list-style:none;}
+  .hunt-wf-hint summary::-webkit-details-marker{display:none;}
+  .hunt-wf-hint summary::before{content:'ℹ️ '; }
+  .hunt-wf-hint[open] summary{margin-bottom:6px;}
+  .hunt-wf-hint .settings-note{margin:0;}
   .hunt-plat-badge{
     display:inline-block; font-size:11px; font-weight:800; padding:2px 7px; border-radius:999px;
     margin-left:6px; vertical-align:middle;
@@ -1867,13 +1881,12 @@ let state = {
   coupangQuery: '',
   coupangResults: null,
   selectedCoupang: null, // 불러온 쿠팡 상품 {name,price,image,url,...}
-  sourceTab: 'coupang', // coupang|tiktok|douyin|xhs|image (유튜브는 3단계 전용)
+  sourceTab: 'coupang', // coupang|tiktok|xhs|image (유튜브는 3단계 전용)
   tiktokQuery: '',
   youtubeResults: null,
   apifyResults: null,
   youtubeQuery: '',
   youtubeSourceResults: null,
-  douyinQuery: '',
   a1688Query: '',
   xhsQuery: '',
   // 영상 소재 찾기
@@ -1882,12 +1895,12 @@ let state = {
     track: 'product', // product | celeb
     period: '7d',
     limit: 20, // 조회수 상위 10|20|30|50
-    // 확정: coupang / 검토: tiktok·douyin·xhs · 유튜브는 3단계 전용 · 1688 제외
-    enabled: { youtube:false, coupang:true, tiktok:true, douyin:false, xhs:false },
+    // 확정: coupang / 검토: tiktok·xhs · 유튜브는 3단계 전용 · 1688 제외
+    enabled: { youtube:false, coupang:true, tiktok:true, xhs:false },
   },
   selectedSourceVideos: [], // [{platform,url,title,viewCount,channel,thumbnail,programName,airDate,episode}]
   huntShortsResults: null, // 쇼핑쇼츠 추천 영상 목록 (조회수 상위)
-  manualHuntPicks: [], // 샤오홍슈·도우인·1688처럼 API가 없는 사이트에서 사용자가 직접 붙여넣은 영상/상품 링크
+  manualHuntPicks: [], // 샤오홍슈·1688처럼 API가 없는 사이트에서 사용자가 직접 붙여넣은 영상/상품 링크
   // Step 3 — 유튜브 전용 소재 찾기 (BlueThumb 쇼핑쇼츠 방식)
   ytMaterial: {
     keyword: '',
@@ -1900,7 +1913,7 @@ let state = {
   ytMaterialResults: null,
   // 쿠팡 상품 → 타 플랫폼 영상/콘텐츠 탐색 (유튜브는 3단계)
   platformHunt: {
-    panel: 'tiktok', // tiktok|douyin|xhs
+    panel: 'tiktok', // tiktok|xhs
     kwKo: '',
     kwZh: '',
     lastOpened: {},
@@ -3052,7 +3065,7 @@ function launchPreset(id){
       break;
     case 'pet-real':
       state.sourceHunt.track = 'pet';
-      state.sourceHunt.enabled = { youtube:true, tiktok:true, coupang:false, douyin:false, xhs:false };
+      state.sourceHunt.enabled = { youtube:true, tiktok:true, coupang:false, xhs:false };
       state.scriptMode = 'pet-real';
       state.current = 'script';
       break;
@@ -4108,7 +4121,6 @@ const PLATFORM_HUNT_DEFS = [
   { id:'youtube', icon:'▶️', name:'유튜브', kind:'쇼츠·영상', preferZh:false, hasApi:true,  status:'ok',     periods:'all' },
   { id:'coupang', icon:'🛒', name:'쿠팡',   kind:'상품 매칭', preferZh:false, hasApi:true,  status:'ok',     periods:'none' },
   { id:'tiktok',  icon:'🎵', name:'틱톡',   kind:'숏폼 영상', preferZh:true,  hasApi:true,  status:'review', periods:'partial' },
-  { id:'douyin',  icon:'抖', name:'도우인', kind:'숏폼·중국어', preferZh:true,  hasApi:false, status:'review', periods:'partial' },
   { id:'xhs',     icon:'小', name:'샤오홍슈', kind:'후기·중국어', preferZh:true, hasApi:false, status:'review', periods:'partial' },
   // 1688은 영상 소재가 아니라 도매 소싱 → 영상 소재 단계에서 제외
 ];
@@ -4117,10 +4129,10 @@ function ensureSourceHunt(){
   if(!state.sourceHunt || typeof state.sourceHunt !== 'object'){
     state.sourceHunt = {
       keyword:'', track:'product', period:'7d', limit:20,
-      enabled:{ youtube:true, coupang:true, tiktok:true, douyin:false, xhs:false },
+      enabled:{ youtube:true, coupang:true, tiktok:true, xhs:false },
     };
   }
-  if(!state.sourceHunt.enabled) state.sourceHunt.enabled = { youtube:true, coupang:true, tiktok:true, douyin:false, xhs:false };
+  if(!state.sourceHunt.enabled) state.sourceHunt.enabled = { youtube:true, coupang:true, tiktok:true, xhs:false };
   const isPet = state.sourceHunt.track === 'pet';
   if(isPet){
     // 반려동물 트랙: 쿠팡은 의미 없음.
@@ -4314,9 +4326,9 @@ function resolveHuntKeywordBase(){
   return '';
 }
 
-/** 도우인·샤오홍슈 등 중국 사이트 여부 */
+/** 샤오홍슈 등 중국 사이트 여부 */
 function isChineseSitePlatform(platformId){
-  return platformId === 'douyin' || platformId === 'xhs';
+  return platformId === 'xhs';
 }
 function looksChinese(s){ return /[\u4e00-\u9fff]/.test(String(s||'')); }
 function looksHangul(s){ return /[가-힣]/.test(String(s||'')); }
@@ -4380,13 +4392,12 @@ function expandZhHuntQuery(zhBase, track, platformId){
     else if(!/测评|推荐|种草|开箱|好物|吃播|美妆/.test(zh)) zh = `${zh} 测评`;
   }
   if(platformId === 'xhs' && !/种草|安利|测评/.test(zh)) zh = `${zh} 种草`;
-  if(platformId === 'douyin' && !/推荐|测评|好物|同款/.test(zh)) zh = `${zh} 推荐`;
   return zh.replace(/\s+/g,' ').trim().slice(0, 80);
 }
 
 /**
  * A: 카테고리 기준 / B: 연예인·방송
- * 중국 사이트(도우인·샤오홍슈)는 중국어 쿼리로 변환
+ * 중국 사이트(샤오홍슈)는 중국어 쿼리로 변환
  * 주의: 이미 확장된 검색어를 다시 넣지 않음 (누적 방지)
  */
 function buildHuntQuery(baseKw, platformId){
@@ -4401,9 +4412,7 @@ function buildHuntQuery(baseKw, platformId){
 
   // 중국 사이트 → 중국어 검색어
   if(isChineseSitePlatform(platformId)){
-    const dedicated = platformId === 'douyin'
-      ? (document.getElementById('douyinQueryInput')?.value.trim() || state.douyinQuery || '')
-      : (document.getElementById('xhsQueryInput')?.value.trim() || state.xhsQuery || '');
+    const dedicated = document.getElementById('xhsQueryInput')?.value.trim() || state.xhsQuery || '';
     let zhBase = '';
     // 한글 베이스가 있으면 항상 중국어로 변환 (이전 중국어 입력보다 우선)
     if(kw && looksHangul(kw)){
@@ -4440,8 +4449,8 @@ function syncHuntKeywordFromInputs(){
 function selectedHuntPlatformIds(){
   const hunt = ensureSourceHunt();
   const en = hunt.enabled || {};
-  // 영상 소재는 유튜브·틱톡(+고급: 도우인·샤오홍슈)에서만. 쿠팡은 상품 확인 단계로 분리.
-  const ids = ['youtube','tiktok','douyin','xhs'].filter(id => en[id]);
+  // 영상 소재는 유튜브·틱톡(+고급: 샤오홍슈)에서만. 쿠팡은 상품 확인 단계로 분리.
+  const ids = ['youtube','tiktok','xhs'].filter(id => en[id]);
   if(hunt.track === 'celeb'){
     return ids.filter(id => id === 'tiktok');
   }
@@ -4558,13 +4567,6 @@ async function runHuntSelectedPlatforms(){
         notes.push('틱톡 탭');
       }
       ensurePlatformHunt().lastOpened.tiktok = true;
-    } else if(id === 'douyin'){
-      state.douyinQuery = kw;
-      ensurePlatformHunt().kwZh = kw;
-      window.open(platformHuntSearchUrl('douyin', kw || '热门'), '_blank');
-      opened++;
-      notes.push(`도우인 「${kw}」`);
-      ensurePlatformHunt().lastOpened.douyin = true;
     } else if(id === 'xhs'){
       state.xhsQuery = kw;
       ensurePlatformHunt().kwZh = kw;
@@ -4605,7 +4607,7 @@ function toggleSelectedSourceVideo(video){
   state.selectedSourceVideos = list;
 }
 
-const SRC_PLAT_LABEL = { youtube:'▶️ 유튜브', tiktok:'🎵 틱톡', xhs:'小 샤오홍슈', douyin:'抖 도우인', a1688:'🏭 1688' };
+const SRC_PLAT_LABEL = { youtube:'▶️ 유튜브', tiktok:'🎵 틱톡', xhs:'小 샤오홍슈', a1688:'🏭 1688' };
 
 function sourceResultsPickHtml(items, platform){
   const list = items || [];
@@ -4770,7 +4772,7 @@ function platformHuntKeyword(platformId){
   const def = PLATFORM_HUNT_DEFS.find(p => p.id === platformId);
   const ko = (ph.kwKo || '').trim();
   const zh = (ph.kwZh || '').trim();
-  // 도우인·샤오홍슈는 중국어만 사용
+  // 샤오홍슈는 중국어만 사용
   if(isChineseSitePlatform(platformId)){
     if(zh && looksChinese(zh)) return expandZhHuntQuery(zh, ensureSourceHunt().track, platformId);
     return buildHuntQuery(ko || resolveHuntKeywordBase(), platformId);
@@ -4790,7 +4792,6 @@ function platformHuntSearchUrl(platformId, keyword){
       return `https://www.youtube.com/results?search_query=${kw}${sp ? '&sp='+sp : ''}`;
     }
     case 'tiktok':  return `https://www.tiktok.com/search?q=${kw}`;
-    case 'douyin':  return `https://www.douyin.com/search/${kw}`;
     case 'coupang': return `https://www.coupang.com/np/search?q=${kw}`;
     case 'xhs':     return `https://www.xiaohongshu.com/search_result?keyword=${kw}`;
     default: return '';
@@ -4856,18 +4857,6 @@ function crossPlatformHuntHtml(){
         ${sourceResultsPickHtml(state.apifyResults, 'tiktok') || videoResultListHtml(state.apifyResults, { portrait:true })}
       `;
     }
-    if(def.id === 'douyin'){
-      const zhPrev = escHtml(activeKw || buildHuntQuery('', 'douyin'));
-      return `
-        <div class="ax-p">도우인은 <b>중국어</b>로 검색합니다. 로그인·중국 IP 제한이 있을 수 있어요.</div>
-        <div class="ax-meta" style="margin:6px 0 10px;">중국어 검색어: <b>${zhPrev}</b></div>
-        <div class="ph-actions">
-          <button class="btn" data-ph-action="open" data-ph-open="douyin" type="button">抖 도우인 중국어 검색</button>
-        </div>
-        ${statusHtml('ph-douyin')}
-        ${(plan.zh||[]).length ? `<div style="margin-top:10px;"><b style="font-size:12px;">추천 중국어 키워드</b><div class="ax-chips">${plan.zh.map(kw=>`<button type="button" class="ax-chip" data-ph-use-kw="${escHtml(kw)}" data-ph-kw-lang="zh">${escHtml(kw)}</button>`).join('')}</div></div>` : ''}
-      `;
-    }
     const zhPrev = escHtml(activeKw || buildHuntQuery('', 'xhs'));
     return `
       <div class="ax-p">샤오홍슈는 <b>중국어</b>로 검색합니다. 후기·开箱 톤 벤치마크용입니다. (기간: 1일·1주·6개월)</div>
@@ -4902,13 +4891,13 @@ function crossPlatformHuntHtml(){
           <input type="text" id="phKwKo" value="${escHtml(ph.kwKo||'')}" placeholder="예: 갤럭시 Z Fold 리뷰">
         </div>
         <div class="field">
-          <label>중국어 검색어 (도우인·샤오홍슈 필수)</label>
+          <label>중국어 검색어 (샤오홍슈 필수)</label>
           <input type="text" id="phKwZh" value="${escHtml(ph.kwZh||'')}" placeholder="예: 好物推荐 · 분석 후 자동 추천 · 직접 수정 가능">
         </div>
       </div>
       ${(plan.ko||[]).length ? `<div class="ax-chips" style="margin-top:-4px; margin-bottom:12px;">${plan.ko.map(kw=>`<button type="button" class="ax-chip" data-ph-use-kw="${escHtml(kw)}" data-ph-kw-lang="ko">${escHtml(kw)}</button>`).join('')}</div>` : ''}
 
-      <div class="ph-plats" style="grid-template-columns:repeat(4,minmax(0,1fr));">
+      <div class="ph-plats" style="grid-template-columns:repeat(2,minmax(0,1fr));">
         ${videoPlats.map(p=>`
           <button type="button" class="ph-plat ${panel===p.id?'active':''} ${p.status==='review'?'review':''}" data-ph-panel="${p.id}">
             <span class="ico">${p.icon}</span>
@@ -4925,7 +4914,7 @@ function crossPlatformHuntHtml(){
         ${panelBody}
       </div>
       ${statusHtml('platform-hunt')}
-      <div class="settings-note">확정: 유튜브·쿠팡 · 검토: 틱톡·도우인·샤오홍슈 · 제외: 1688</div>
+      <div class="settings-note">확정: 유튜브·쿠팡 · 검토: 틱톡·샤오홍슈 · 제외: 1688</div>
     </div>
   `;
 }
@@ -4939,7 +4928,6 @@ const HUNT_PLAT_TABS = [
   { id:'youtube', icon:'▶️', name:'유튜브',   api:true,  desc:'조회수 상위 쇼핑 영상 · 쇼츠/롱폼/CC' },
   { id:'tiktok',  icon:'🎵', name:'틱톡',     api:true,  desc:'외국어 소재 검색 (Apify 자동 수집)' },
   { id:'xhs',     icon:'小', name:'샤오홍슈', api:false, desc:'중국어 후기·새 탭 검색' },
-  { id:'douyin',  icon:'抖', name:'도우인',   api:false, desc:'중국어 숏폼·새 탭 검색' },
   { id:'a1688',   icon:'🏭', name:'1688',     api:false, desc:'같은 제품 도매 소싱 확인' },
 ];
 
@@ -4947,7 +4935,6 @@ function huntPlatTabUrl(tabId, kw){
   const zh = looksHangul(kw) ? (translateHuntKwToZh(kw) || kw) : kw;
   switch(tabId){
     case 'xhs':    return `https://www.xiaohongshu.com/search_result?keyword=${encodeURIComponent(zh || '种草')}`;
-    case 'douyin': return `https://www.douyin.com/search/${encodeURIComponent(zh || '热门')}`;
     case 'a1688':  return `https://s.1688.com/selloffer/offer_search.htm?keywords=${encodeURIComponent(zh || '爆款')}`;
     case 'tiktok': return `https://www.tiktok.com/search?q=${encodeURIComponent(zh || kw || 'fyp')}`;
     default:       return `https://www.youtube.com/results?search_query=${encodeURIComponent(kw || '쇼핑 쇼츠')}`;
@@ -4970,11 +4957,10 @@ function renderAnalysis(){
     <button type="button" class="hunt-period ${period===p.id?'active':''}" data-hunt-period="${p.id}" title="${escHtml(p.hint)}">${p.label}</button>`;
 
   const tabBar = `
-    <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px;">
+    <div class="hunt-plat-chip-row">
       ${HUNT_PLAT_TABS.map(t=>`
-        <button type="button" class="hunt-track ${tab===t.id?'active':''}" data-hunt-plat-tab="${t.id}" style="min-height:52px; flex:1; min-width:110px; padding:8px 10px;">
-          <b style="font-size:13px;">${t.icon} ${t.name}</b>
-          <span style="font-size:10.5px;">${t.api?'자동 수집':'새 탭 검색'}</span>
+        <button type="button" class="hunt-plat-chip ${tab===t.id?'active':''}" data-hunt-plat-tab="${t.id}" title="${escHtml(t.desc)} · ${t.api?'자동 수집':'새 탭 검색'}">
+          ${t.icon} ${t.name}
         </button>
       `).join('')}
     </div>`;
@@ -5040,11 +5026,10 @@ function renderAnalysis(){
         ${statusHtml('hunt-multi')}
       `;
     }
-    // xhs · douyin · 1688 — 새 탭 검색 전용
-    const labels = { xhs:'샤오홍슈', douyin:'도우인', a1688:'1688' };
+    // xhs · 1688 — 새 탭 검색 전용
+    const labels = { xhs:'샤오홍슈', a1688:'1688' };
     const notes = {
       xhs: '중국어 후기·언박싱 벤치마크. 로그인 요구될 수 있음.',
-      douyin: '중국 내수 숏폼. 중국 IP·로그인 제한이 있을 수 있음.',
       a1688: '같은 제품의 도매 소싱처 확인용. 제품명·이미지로 검색.',
     };
     return `
@@ -5070,7 +5055,6 @@ function renderAnalysis(){
     <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;">
       <a class="btn secondary" style="font-size:12px; text-decoration:none;" href="${escHtml(huntPlatTabUrl('tiktok', kw || picks[0]?.title || ''))}" target="_blank" rel="noopener">🎵 틱톡에서 같은 제품</a>
       <a class="btn secondary" style="font-size:12px; text-decoration:none;" href="${escHtml(huntPlatTabUrl('xhs', kw || picks[0]?.title || ''))}" target="_blank" rel="noopener">小 샤오홍슈에서</a>
-      <a class="btn secondary" style="font-size:12px; text-decoration:none;" href="${escHtml(huntPlatTabUrl('douyin', kw || picks[0]?.title || ''))}" target="_blank" rel="noopener">抖 도우인에서</a>
       <a class="btn secondary" style="font-size:12px; text-decoration:none;" href="${escHtml(huntPlatTabUrl('a1688', kw || picks[0]?.title || ''))}" target="_blank" rel="noopener">🏭 1688 도매 확인</a>
       <a class="btn secondary" style="font-size:12px; text-decoration:none;" href="https://lens.google.com/" target="_blank" rel="noopener" title="영상 스크린샷을 붙여넣으면 정확한 제품명을 찾아줍니다">🔍 구글 렌즈 (스샷→제품명)</a>
       <a class="btn secondary" style="font-size:12px; text-decoration:none;" href="https://www.google.com/search?q=${encodeURIComponent(cleanProductTitle(picks[0]?.title||kw||''))}" target="_blank" rel="noopener">G 구글에서 제품명 검색</a>
@@ -5095,17 +5079,21 @@ function renderAnalysis(){
       ` : ''}
 
       <div class="card">
-        <div class="settings-note" style="margin-bottom:12px; line-height:1.6;">
-          <b>워크플로우:</b> ① 유튜브에서 조회수 높은 쇼핑 영상 발굴 → ② 틱톡·샤오홍슈·도우인에서 같은 제품 영상 교차 확인 → ③ 구글 렌즈로 정확한 제품명 특정 → ④ 쿠팡에 같은 제품 있는지 확인(파트너스 링크) → ⑤ 다운로드해 재편집.
+        <details class="hunt-wf-hint">
+          <summary>워크플로우 안내</summary>
+          <div class="settings-note" style="line-height:1.6;">
+            ① 유튜브에서 조회수 높은 쇼핑 영상 발굴 → ② 틱톡·샤오홍슈에서 같은 제품 영상 교차 확인 → ③ 구글 렌즈로 정확한 제품명 특정 → ④ 쿠팡에 같은 제품 있는지 확인(파트너스 링크) → ⑤ 다운로드해 재편집.
+          </div>
+        </details>
+
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+          <input type="text" id="huntKeywordInput" value="${escHtml(kw)}" placeholder="검색어 / 제품명 — 예: 무선 미니 가습기 / folding storage box" style="flex:1; min-width:220px;">
+          ${tabBar}
         </div>
 
-        <div class="field">
-          <label>검색어 / 제품명</label>
-          <input type="text" id="huntKeywordInput" value="${escHtml(kw)}" placeholder="예: 무선 미니 가습기 / 도넛 슬라이서 / folding storage box">
+        <div style="margin-top:12px;">
+          ${tabBody}
         </div>
-
-        ${tabBar}
-        ${tabBody}
       </div>
     </div>
 
@@ -9994,23 +9982,23 @@ document.addEventListener('click', async (e)=>{
     const hunt = syncHuntKeywordFromInputs();
     hunt.track = trackEl.dataset.huntTrack;
     if(hunt.track === 'celeb'){
-      hunt.enabled = { youtube:false, tiktok:true, coupang:!!hunt.enabled?.coupang, douyin:false, xhs:false };
+      hunt.enabled = { youtube:false, tiktok:true, coupang:!!hunt.enabled?.coupang, xhs:false };
     }else if(hunt.track === 'pet'){
-      hunt.enabled = { youtube:true, tiktok:true, coupang:false, douyin:false, xhs:false };
+      hunt.enabled = { youtube:true, tiktok:true, coupang:false, xhs:false };
     }else{
-      hunt.enabled = { youtube:false, tiktok:true, coupang:true, douyin:false, xhs:false };
+      hunt.enabled = { youtube:false, tiktok:true, coupang:true, xhs:false };
     }
     render();
     return;
   }
 
-  // 플랫폼 탭 (유튜브/틱톡/샤오홍슈/도우인/1688)
+  // 플랫폼 탭 (유튜브/틱톡/샤오홍슈/1688)
   const platTabEl = e.target.closest?.('[data-hunt-plat-tab]');
   if(platTabEl?.dataset.huntPlatTab){
     const hunt = syncHuntKeywordFromInputs();
     hunt.platTab = platTabEl.dataset.huntPlatTab;
     // 검색은 활성 탭 플랫폼만 실행
-    hunt.enabled = { youtube: hunt.platTab==='youtube', tiktok: hunt.platTab==='tiktok', coupang:false, douyin:false, xhs:false };
+    hunt.enabled = { youtube: hunt.platTab==='youtube', tiktok: hunt.platTab==='tiktok', coupang:false, xhs:false };
     render();
     return;
   }
@@ -10067,13 +10055,13 @@ document.addEventListener('click', async (e)=>{
 
   if(e.target.id === 'huntSelectAllPlats'){
     const hunt = syncHuntKeywordFromInputs();
-    hunt.enabled = { youtube:false, coupang:true, tiktok:true, douyin:true, xhs:true };
+    hunt.enabled = { youtube:false, coupang:true, tiktok:true, xhs:true };
     document.querySelectorAll('.hunt-plat-toggle').forEach(el=> el.classList.add('active'));
     return;
   }
   if(e.target.id === 'huntClearPlats'){
     const hunt = syncHuntKeywordFromInputs();
-    hunt.enabled = { youtube:false, coupang:false, tiktok:false, douyin:false, xhs:false };
+    hunt.enabled = { youtube:false, coupang:false, tiktok:false, xhs:false };
     document.querySelectorAll('.hunt-plat-toggle').forEach(el=> el.classList.remove('active'));
     return;
   }
@@ -10387,21 +10375,6 @@ document.addEventListener('click', async (e)=>{
     return;
   }
 
-  if(e.target.id === 'douyinSearchBtn'){
-    const base = resolveHuntKeywordBase();
-    const typed = document.getElementById('douyinQueryInput')?.value.trim() || '';
-    // 입력칸이 중국어면 그대로, 한글이면 변환
-    const kw = (typed && looksChinese(typed) && !looksHangul(typed))
-      ? expandZhHuntQuery(typed, ensureSourceHunt().track, 'douyin')
-      : buildHuntQuery(typed || base, 'douyin');
-    state.douyinQuery = kw;
-    ensurePlatformHunt().kwZh = kw;
-    ensureSourceHunt().keyword = base;
-    window.open(platformHuntSearchUrl('douyin', kw || '热门'), '_blank');
-    setStatus('hunt-multi','ok', `도우인 중국어 검색: 「${kw}」`);
-    return;
-  }
-
   if(e.target.id === 'xhsSearchBtn'){
     const base = resolveHuntKeywordBase();
     const typed = document.getElementById('xhsQueryInput')?.value.trim() || '';
@@ -10416,7 +10389,7 @@ document.addEventListener('click', async (e)=>{
     return;
   }
 
-  // ===== 크로스 플랫폼 탐색 (유튜브·틱톡·도우인·1688·샤오홍슈) =====
+  // ===== 크로스 플랫폼 탐색 (유튜브·틱톡·1688·샤오홍슈) =====
   const readPlatformHuntInputs = ()=>{
     const ph = ensurePlatformHunt();
     const ko = document.getElementById('phKwKo')?.value;
@@ -12243,8 +12216,8 @@ document.addEventListener('click', async (e)=>{
         productImages:[], productImageUrls:[], productDescription:'', categoryType:'auto', reviewText:'',
         sourceTab:'coupang', tiktokQuery:'', coupangQuery:'', coupangResults:null, selectedCoupang:null,
         youtubeResults:null, apifyResults:null, youtubeQuery:'', youtubeSourceResults:null,
-        douyinQuery:'', a1688Query:'', xhsQuery:'',
-        sourceHunt:{ keyword:'', track:'product', period:'7d', limit:20, enabled:{ youtube:false, coupang:true, tiktok:true, douyin:false, xhs:false } },
+        a1688Query:'', xhsQuery:'',
+        sourceHunt:{ keyword:'', track:'product', period:'7d', limit:20, enabled:{ youtube:false, coupang:true, tiktok:true, xhs:false } },
         selectedSourceVideos:[], huntShortsResults:null, manualHuntPicks:[],
         ytMaterial:{ keyword:'', mode:'shopping', period:'365d', limit:20, minViews:10000, duration:'short' },
         ytMaterialResults:null,
@@ -15037,7 +15010,7 @@ async function callGeminiAnalysis(){
 규칙:
 - 이미지·텍스트에 없는 구체 수치/인증/성분은 추측하지 말고 specs에서 빼거나 unknowns에 넣어.
 - scores는 0~100 정수. uploadScore=쇼츠로 올렸을 때 초반 반응·완시 가능성을 AI가 추정한 점수.
-- chineseKeywords는 틱톡/도우인 검색용 중국어 2~3개.
+- chineseKeywords는 틱톡/샤오홍슈 검색용 중국어 2~3개.
 - searchKeywords는 유튜브 쇼츠 검색용 한국어 2~3개 (짧고 검색되게).
 
 JSON 스키마:
