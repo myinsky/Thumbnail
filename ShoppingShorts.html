@@ -2009,7 +2009,7 @@ let state = {
   bgmVolume: 0.25,
   bgmFade: false,
   aiPanelOpen: true,
-  nlePanel: 'media', // 'media' | 'text' | 'audio' | 'script'
+  nlePanel: 'media', // 'media' | 'template' | 'ai' | 'text' | 'audio' | 'script'
   selectedSubIndex: null,
   inspTab: 'clip',
   subStyle: { fontSize:20, color:'#FFFFFF', outline:'#000000', position:'bottom', bold:true, bg:false, bgColor:'#000000', glow:false, outlineWidth:2, shadow:0, fontFamily:'Noto Sans KR', x:50, y:88 },
@@ -8139,6 +8139,7 @@ function renderManualAssembly(){
       <!-- 좌측 아이콘 레일 -->
       <div class="vp-rail">
         ${navBtn('media','🎞','미디어')}
+        ${navBtn('template','🎨','템플릿')}
         ${navBtn('ai','✨','AI생성')}
         ${navBtn('text','T','자막')}
         ${navBtn('audio','♪','오디오')}
@@ -8167,37 +8168,6 @@ function renderManualAssembly(){
             <button class="vp-btn block" id="selectedAutoEditBtn" type="button" style="margin-bottom:8px;">🤖 대본 기반 AI 정밀 편집 (음성·장면 분석)</button>
             ${statusHtml('viral-auto')}
             ${statusHtml('selected-auto')}
-          ` : ''}
-
-          <div class="vp-panel-title" style="margin-top:6px;"><div>쇼츠 템플릿</div></div>
-          <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:4px; margin-bottom:6px;">
-            ${SHORTS_TEMPLATES.map(t=>`
-              <button type="button" class="vp-mini ${state.shortsTemplate===t.id?'go':''}" data-shorts-template="${t.id}" title="${escHtml(t.desc)}" style="display:flex; flex-direction:column; gap:2px; padding:6px 2px; height:auto; line-height:1.2;">
-                <span style="font-size:15px;">${t.icon}</span>
-                <span style="font-size:9.5px;">${t.label}</span>
-              </button>
-            `).join('')}
-          </div>
-          <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:4px; margin-bottom:8px; font-size:9.5px; text-align:center; color:var(--text-lo);">
-            <label style="cursor:pointer;">제목<br><input type="color" data-tpl-color="titleColor" value="${escHtml(state.titleStyle?.color||'#FFE400')}" style="width:100%; height:22px; border:none; padding:0; cursor:pointer;"></label>
-            <label style="cursor:pointer;">제목배경<br><input type="color" data-tpl-color="titleBg" value="${escHtml(state.titleStyle?.bgColor||'#111827')}" style="width:100%; height:22px; border:none; padding:0; cursor:pointer;"></label>
-            <label style="cursor:pointer;">자막<br><input type="color" data-tpl-color="subColor" value="${escHtml(state.subStyle?.color||'#FFFFFF')}" style="width:100%; height:22px; border:none; padding:0; cursor:pointer;"></label>
-            <label style="cursor:pointer;">자막테두리<br><input type="color" data-tpl-color="subOutline" value="${escHtml(state.subStyle?.outline||'#000000')}" style="width:100%; height:22px; border:none; padding:0; cursor:pointer;"></label>
-          </div>
-
-          <div class="vp-panel-title" style="margin-top:4px;"><div>원본 자막 지우기 <span style="font-weight:400; font-size:9px;">(내보내기에 적용)</span></div></div>
-          <div style="display:flex; gap:4px; margin-bottom:4px;">
-            ${[['none','안 함'],['crop','하단 크롭'],['blur','하단 블러']].map(([m,l])=>`
-              <button type="button" class="vp-mini ${ (state.subErase?.mode||'none')===m?'go':''}" data-sub-erase-mode="${m}" style="flex:1;">${l}</button>
-            `).join('')}
-          </div>
-          ${(state.subErase?.mode||'none')!=='none' ? `
-            <div style="display:flex; align-items:center; gap:6px; margin-bottom:8px; font-size:10px; color:var(--text-lo);">
-              <span>높이</span>
-              <input type="range" min="8" max="35" step="1" value="${Math.round((state.subErase?.height||0.18)*100)}" data-sub-erase-height style="flex:1;">
-              <b>${Math.round((state.subErase?.height||0.18)*100)}%</b>
-            </div>
-            <div class="settings-note" style="margin:0 0 8px; font-size:10px;">다운로드한 영상 하단에 박힌 자막·워터마크를 ${state.subErase?.mode==='crop'?'잘라내고 화면을 채웁니다':'블러로 가립니다'}. 미리보기에는 표시되지 않고 내보내기에 적용돼요.</div>
           ` : ''}
 
           ${(state.sourceEDL||[]).length ? `
@@ -8242,6 +8212,39 @@ function renderManualAssembly(){
             ${statusHtml('suggest-analyze')}
             ${statusHtml('timeline-add')}
             ${renderSuggestedSegmentsPanel()}
+          ` : ''}
+        ` : ''}
+
+        ${panel==='template' ? `
+          <div class="vp-panel-title"><div>쇼츠 템플릿</div></div>
+          <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:4px; margin-bottom:6px;">
+            ${SHORTS_TEMPLATES.map(t=>`
+              <button type="button" class="vp-mini ${state.shortsTemplate===t.id?'go':''}" data-shorts-template="${t.id}" title="${escHtml(t.desc)}" style="display:flex; flex-direction:column; gap:2px; padding:6px 2px; height:auto; line-height:1.2;">
+                <span style="font-size:15px;">${t.icon}</span>
+                <span style="font-size:9.5px;">${t.label}</span>
+              </button>
+            `).join('')}
+          </div>
+          <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:4px; margin-bottom:8px; font-size:9.5px; text-align:center; color:var(--text-lo);">
+            <label style="cursor:pointer;">제목<br><input type="color" data-tpl-color="titleColor" value="${escHtml(state.titleStyle?.color||'#FFE400')}" style="width:100%; height:22px; border:none; padding:0; cursor:pointer;"></label>
+            <label style="cursor:pointer;">제목배경<br><input type="color" data-tpl-color="titleBg" value="${escHtml(state.titleStyle?.bgColor||'#111827')}" style="width:100%; height:22px; border:none; padding:0; cursor:pointer;"></label>
+            <label style="cursor:pointer;">자막<br><input type="color" data-tpl-color="subColor" value="${escHtml(state.subStyle?.color||'#FFFFFF')}" style="width:100%; height:22px; border:none; padding:0; cursor:pointer;"></label>
+            <label style="cursor:pointer;">자막테두리<br><input type="color" data-tpl-color="subOutline" value="${escHtml(state.subStyle?.outline||'#000000')}" style="width:100%; height:22px; border:none; padding:0; cursor:pointer;"></label>
+          </div>
+
+          <div class="vp-panel-title" style="margin-top:4px;"><div>원본 자막 지우기 <span style="font-weight:400; font-size:9px;">(내보내기에 적용)</span></div></div>
+          <div style="display:flex; gap:4px; margin-bottom:4px;">
+            ${[['none','안 함'],['crop','하단 크롭'],['blur','하단 블러']].map(([m,l])=>`
+              <button type="button" class="vp-mini ${ (state.subErase?.mode||'none')===m?'go':''}" data-sub-erase-mode="${m}" style="flex:1;">${l}</button>
+            `).join('')}
+          </div>
+          ${(state.subErase?.mode||'none')!=='none' ? `
+            <div style="display:flex; align-items:center; gap:6px; margin-bottom:8px; font-size:10px; color:var(--text-lo);">
+              <span>높이</span>
+              <input type="range" min="8" max="35" step="1" value="${Math.round((state.subErase?.height||0.18)*100)}" data-sub-erase-height style="flex:1;">
+              <b>${Math.round((state.subErase?.height||0.18)*100)}%</b>
+            </div>
+            <div class="settings-note" style="margin:0 0 8px; font-size:10px;">다운로드한 영상 하단에 박힌 자막·워터마크를 ${state.subErase?.mode==='crop'?'잘라내고 화면을 채웁니다':'블러로 가립니다'}. 미리보기에는 표시되지 않고 내보내기에 적용돼요.</div>
           ` : ''}
         ` : ''}
 
