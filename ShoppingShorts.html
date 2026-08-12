@@ -7353,6 +7353,115 @@ async function buildViralEdlFromSelection(indices){
   }));
 }
 
+/**
+ * AI 분석 + 바이럴 공식: 장면 임팩트 점수로 훅/전개/페이오프를 고름.
+ * 분석 실패한 영상은 위치 비율 휴리스틱으로 폴백.
+ */
+async function buildAiViralEdlFromSelection(indices, onStatus){
+  let idxs = (indices||[]).filter(i => state.sourceVideos[i] && !state.sourceVideos[i].isImage);
+  if(!idxs.length) throw new Error('영상 클립을 선택해주세요 (이미지는 제외).');
+  if(idxs.length > MAX_VIRAL_AUTO) idxs = idxs.slice(0, MAX_VIRAL_AUTO);
+
+  for(const i of idxs){
+    if(!state.sourceDurations?.[i]){ try{ await ensureVideoDuration(i); }catch(_){ } }
+  }
+  const durOf = (i)=> Math.max(3, Number(state.sourceDurations?.[i]) || 12);
+
+  // ① 영상별 장면 분석 (실패 시 해당 영상은 휴리스틱)
+  const sceneMap = {};
+  let analyzedCount = 0;
+  for(let k=0;k<idxs.length;k++){
+    const vi = idxs[k];
+    onStatus?.(`① 영상 분석 중 (${k+1}/${idxs.length}) — ${state.sourceVideos[vi].name?.slice(0,20) || ''}...`);
+    try{
+      const src = state.sourceVideos[vi].file || state.sourceVideos[vi].url;
+      const scenes = await analyzeVideoWithGemini(src, state.sourceVideos[vi].name || `영상${vi+1}`);
+      if(scenes.length){ sceneMap[vi] = scenes; analyzedCount++; }
+    }catch(err){
+      console.warn('장면 분석 실패 (video ' + vi + '):', err?.message || err);
+    }
+  }
+  state.sourceScenes = Object.entries(sceneMap).flatMap(([vi, scenes]) => scenes.map(s => ({ ...s, videoIndex:Number(vi) })));
+
+  onStatus?.('② 임팩트 순으로 훅→전개→페이오프 배치 중...');
+  const cutFromScene = (vi, scene, len)=>{
+    const d = durOf(vi);
+    const sceneLen = scene.end - scene.start;
+    // 장면이 길면 장면 안 중심부에서 자름
+    let start = sceneLen > len ? scene.start + (sceneLen - len) * 0.35 : scene.start;
+    start = Math.max(0, Math.min(start, d - len - 0.1));
+    return {
+      videoIndex: vi,
+      start: Number(start.toFixed(2)),
+      end: Number(Math.min(d, start + len).toFixed(2)),
+      line: '',
+      volume: 0,
+      suggestMeta: { reason: scene.desc, value: `임팩트 ${scene.impact}/10 · ${scene.action||''}` },
+    };
+  };
+  const heuristicCut = (vi, ratio, len)=>{
+    const d = durOf(vi);
+    let s = Math.max(0, Math.min(d * ratio, d - len - 0.2));
+    return { videoIndex:vi, start:Number(s.toFixed(2)), end:Number(Math.min(d, s+len).toFixed(2)), line:'', volume:0 };
+  };
+
+  const used = new Set(); // "vi:sceneStart" 중복 방지
+  const pickBest = (vi, len, excludeTop=0)=>{
+    const scenes = (sceneMap[vi]||[]).slice().sort((a,b)=> b.impact - a.impact);
+    for(let k=excludeTop; k<scenes.length; k++){
+      const key = vi + ':' + scenes[k].start;
+      if(used.has(key)) continue;
+      used.add(key);
+      return cutFromScene(vi, scenes[k], len);
+    }
+    return null;
+  };
+
+  const first = idxs[0], last = idxs[idxs.length-1];
+  const mids = idxs.slice(1, Math.max(1, idxs.length-1));
+  const HOOK=1.8, PAYOFF=2.4, TAIL=1.2;
+  let midLen = mids.length ? Math.max(1.1, Math.min(2.0, (13.0 - HOOK - PAYOFF - TAIL) / mids.length)) : 1.5;
+
+  const segs = [];
+  // 훅: 전체 영상 중 임팩트 최고 장면 (있으면), 없으면 첫 영상 휴리스틱
+  let hookSeg = null;
+  {
+    let best = null, bestVi = null;
+    for(const vi of idxs){
+      const top = (sceneMap[vi]||[]).slice().sort((a,b)=> b.impact-a.impact)[0];
+      if(top && (!best || top.impact > best.impact)){ best = top; bestVi = vi; }
+    }
+    if(best){ used.add(bestVi + ':' + best.start); hookSeg = { ...cutFromScene(bestVi, best, HOOK), role:'hook' }; }
+    else hookSeg = { ...heuristicCut(first, 0.12, HOOK), role:'hook' };
+  }
+  segs.push(hookSeg);
+  // 전개: 각 중간 영상의 상위 장면
+  mids.forEach((vi, k)=>{
+    const cut = pickBest(vi, midLen) || heuristicCut(vi, 0.30 + k*0.08, midLen);
+    segs.push({ ...cut, role:'build' });
+  });
+  // 페이오프: 마지막 영상 상위 장면 (훅으로 안 쓴 것)
+  const payoffCut = pickBest(last, PAYOFF) || heuristicCut(last, 0.45, PAYOFF);
+  segs.push({ ...payoffCut, role:'payoff' });
+  // 루프 꼬리: 훅 영상의 다른 장면
+  if(idxs.length >= 2){
+    const hookVi = hookSeg.videoIndex;
+    const tailCut = pickBest(hookVi, TAIL, 1) || heuristicCut(hookVi, 0.70, TAIL);
+    segs.push({ ...tailCut, role:'loop' });
+  }
+  // 10초 미만 보충
+  let total = segs.reduce((a,s)=> a + (s.end - s.start), 0);
+  let extraK = 0;
+  while(total < 10 && extraK < 6){
+    const vi = idxs[extraK % idxs.length];
+    const cut = pickBest(vi, 1.4) || heuristicCut(vi, 0.2 + 0.1*extraK, 1.4);
+    segs.splice(segs.length-1, 0, { ...cut, role:'build' });
+    total += cut.end - cut.start;
+    extraK++;
+  }
+  return { edl: segs, analyzedCount, totalVideos: idxs.length };
+}
+
 /** 완성된 타임라인에서 끝까지 보게 만드는 나레이션 대본 생성 */
 async function generateRetentionScriptFromEdl(){
   const edl = (state.sourceEDL||[]).filter(e => (e.track||1) === 1);
@@ -7896,8 +8005,9 @@ function renderManualAssembly(){
             </div>
           </div>
           ${(state.selectedSourceIndices||[]).length ? `
-            <button class="vp-btn primary block" id="viralAutoEditBtn" type="button" style="margin-bottom:6px;">⚡ 선택 ${Math.min(state.selectedSourceIndices.length, MAX_VIRAL_AUTO)}개 바이럴 컷 자동 편집 (10~15초)</button>
-            <div class="settings-note" style="margin:0 0 8px; font-size:11px;">훅→전개→페이오프→루프 공식으로 즉시 배치 · 최대 ${MAX_VIRAL_AUTO}개 · API 불필요</div>
+            <button class="vp-btn primary block" id="aiViralAutoEditBtn" type="button" style="margin-bottom:6px;">🧠 선택 ${Math.min(state.selectedSourceIndices.length, MAX_VIRAL_AUTO)}개 AI 분석 + 바이럴 자동 편집</button>
+            <div class="settings-note" style="margin:0 0 6px; font-size:11px;">Gemini가 장면별 임팩트를 분석 → 최고 장면을 훅·페이오프에 배치 (Gemini 키 필요)</div>
+            <button class="vp-btn block" id="viralAutoEditBtn" type="button" style="margin-bottom:6px;">⚡ 빠른 바이럴 컷 (분석 없이 공식만 · 즉시)</button>
             <button class="vp-btn block" id="selectedAutoEditBtn" type="button" style="margin-bottom:8px;">🤖 대본 기반 AI 정밀 편집 (음성·장면 분석)</button>
             ${statusHtml('viral-auto')}
             ${statusHtml('selected-auto')}
@@ -11122,24 +11232,43 @@ document.addEventListener('click', async (e)=>{
     return;
   }
 
-  if(e.target.id === 'viralAutoEditBtn'){
+  if(e.target.id === 'viralAutoEditBtn' || e.target.id === 'aiViralAutoEditBtn'){
+    const useAi = e.target.id === 'aiViralAutoEditBtn';
     let idxs = (state.selectedSourceIndices||[]).slice().sort((a,b)=>a-b);
     if(!idxs.length) return;
     if(idxs.length > MAX_VIRAL_AUTO){
       if(!confirm(`바이럴 컷은 한 번에 ${MAX_VIRAL_AUTO}개까지 처리해요. 앞쪽 ${MAX_VIRAL_AUTO}개만 사용할까요?`)) return;
       idxs = idxs.slice(0, MAX_VIRAL_AUTO);
     }
-    setStatus('viral-auto','loading','바이럴 공식으로 컷 배치 중 (훅→전개→페이오프→루프)...');
+    if(useAi && !String(state.keys.gemini||'').trim()){
+      setStatus('viral-auto','err','AI 분석에는 Gemini API 키가 필요해요. 「⚡ 빠른 바이럴 컷」은 키 없이 사용 가능합니다.');
+      return;
+    }
+    setStatus('viral-auto','loading', useAi ? 'AI 장면 분석 준비 중...' : '바이럴 공식으로 컷 배치 중 (훅→전개→페이오프→루프)...');
     try{
-      const edl = await buildViralEdlFromSelection(idxs);
+      let edl, note = '';
+      if(useAi){
+        const r = await buildAiViralEdlFromSelection(idxs, (msg)=> setStatus('viral-auto','loading', msg));
+        edl = r.edl;
+        note = r.analyzedCount < r.totalVideos
+          ? ` · 분석 성공 ${r.analyzedCount}/${r.totalVideos} (실패분은 위치 공식으로 배치)`
+          : ` · ${r.analyzedCount}개 전부 장면 분석 완료`;
+      }else{
+        edl = await buildViralEdlFromSelection(idxs);
+      }
       state.sourceEDL = edl;
       state.selectedEdlIndex = 0;
       state.tlFocus = 'clip';
       state.tlEditMode = 'auto';
       state.previewMode = 'timeline';
+      state.playhead = 0;
       snapMainClipsTogether();
+      // 자막은 아직 없음 — 기존 자막이 남아 있으면 새 컷 길이와 어긋나므로 비움
+      state.subtitles = [];
       const total = edl.reduce((a,s)=> a + (s.end - s.start), 0);
-      setStatus('viral-auto','ok',`완료! ${edl.length}컷 · 총 ${total.toFixed(1)}초 — 이어서 「🎙 대본 뽑기」로 나레이션을 붙이세요.`);
+      setStatus('viral-auto','ok',
+        `완료! ${edl.length}컷 · 총 ${total.toFixed(1)}초${note}` +
+        ` — 미리보기 ▶ 로 확인하세요. 다음: ① 🎙 대본 뽑기 → ② AI 탭에서 나레이션 음성 → ③ 자막 검수 → ④ 내보내기.`);
       state.selectedSourceIndices = [];
       render();
     }catch(err){
@@ -13631,21 +13760,45 @@ async function analyzeVideoWithGemini(source, label='영상'){
     throw new Error(`${label}: 20MB 초과 영상은 지원 안 돼요. 압축해서 다시 올려주세요.`);
   }
   const b64 = await blobToBase64(blob);
-  const url = geminiUrl('gemini-3.5-flash');
   const body = {
     contents: [{
       parts: [
-        { text: `이 영상을 장면 단위로 분석해줘. 각 장면의 시작-끝 시간(초, 정수)과 내용을 아래
-        JSON 배열 형식으로만 답해줘 (다른 텍스트 없이): [{"start":0,"end":3,"desc":"제품을 정면에서 보여줌"}]` },
+        { text: [
+          '이 영상을 장면 단위로 분석해줘. 각 장면마다:',
+          '- start, end: 초 (숫자)',
+          '- desc: 무슨 일이 일어나는지 구체적으로 한 문장',
+          '- impact: 1~10. 스크롤을 멈추게 할 시각적 임팩트/재미/놀라움 (10=최고 훅감)',
+          '- action: 핵심 동작 유형 (예: 사용시연, 리액션, 전후비교, 클로즈업, 실패, 반전)',
+          'JSON 배열만 출력 (다른 텍스트·코드블록 없이):',
+          '[{"start":0,"end":3,"desc":"...","impact":7,"action":"리액션"}]'
+        ].join('\n') },
         { inline_data: { mime_type: blob.type || 'video/mp4', data: b64 } }
       ]
     }]
   };
-  const res = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
-  if(!res.ok) throw new Error(`${label} 분석 실패: HTTP ${res.status}`);
-  const data = await res.json();
-  const text = data.candidates[0].content.parts[0].text;
-  return JSON.parse(text.replace(/```json|```/g,'').trim());
+  // 프록시 폴백이 있는 공용 경로 사용 (직접 fetch 는 file:// · CORS 에서 잘 죽음)
+  const { data } = await fetchGeminiGenerateContent(body, { model: resolveGeminiModel() });
+  const text = data?.candidates?.[0]?.content?.parts?.map(p=>p?.text||'').join('') || '';
+  if(!text.trim()){
+    const blockReason = data?.promptFeedback?.blockReason || data?.candidates?.[0]?.finishReason || '';
+    throw new Error(`${label} 분석 응답이 비었어요${blockReason ? ` (사유: ${blockReason})` : ''}.`);
+  }
+  const raw = text.replace(/```json|```/g,'').trim();
+  const s = raw.indexOf('['), e = raw.lastIndexOf(']');
+  if(s < 0 || e <= s) throw new Error(`${label} 분석 결과를 JSON으로 해석하지 못했어요.`);
+  let arr;
+  try{ arr = JSON.parse(raw.slice(s, e+1)); }
+  catch(err){ throw new Error(`${label} 장면 JSON 파싱 실패: ${err.message}`); }
+  if(!Array.isArray(arr)) throw new Error(`${label} 장면 배열이 아니에요.`);
+  return arr
+    .map(sc => ({
+      start: Math.max(0, Number(sc?.start) || 0),
+      end: Math.max(0, Number(sc?.end) || 0),
+      desc: String(sc?.desc || '').trim(),
+      impact: Math.max(1, Math.min(10, Number(sc?.impact) || 5)),
+      action: String(sc?.action || '').trim(),
+    }))
+    .filter(sc => sc.end > sc.start);
 }
 
 function ensureVideoDuration(videoIndex){
