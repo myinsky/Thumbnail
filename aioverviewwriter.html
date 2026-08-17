@@ -9485,13 +9485,22 @@
     if (hasProjectContent()) scheduleProjectAutosave("category");
   }
 
-  document.querySelectorAll(".cat-card").forEach(card => {
-    card.onclick = () => selectCategory(card.dataset.cat);
-  });
+  function bindCategoryClickHandlers() {
+    document.querySelectorAll("#catOptions .cat-card[data-cat]").forEach(card => {
+      card.addEventListener("click", (e) => {
+        e.stopPropagation();
+        selectCategory(card.dataset.cat);
+      }, false);
+    });
 
-  document.querySelectorAll(".topic-cat-btn").forEach(btn => {
-    btn.onclick = () => selectCategory(btn.dataset.topicCat);
-  });
+    document.querySelectorAll(".topic-cat-btn[data-topic-cat]").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        selectCategory(btn.dataset.topicCat);
+      }, false);
+    });
+  }
+  bindCategoryClickHandlers();
 
   // 기본값: 통합글쓰기(tool) — 네이버 통합검색 정보·꿀팁 엔진
   // 기본 카테고리 선택은 TOPIC_DOMAINS 등 후속 설정 선언이 끝난 뒤 실행한다.
